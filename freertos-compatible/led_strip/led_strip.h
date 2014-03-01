@@ -13,9 +13,9 @@
 #define LED_STRIP_H_
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f10x.h"
 #include "FreeRTOS.h"
 #include "semphr.h"
+#include "stm32f10x.h"
 #include "gpio/gpio.h"
 
 /* Defines -------------------------------------------------------------------*/
@@ -48,5 +48,7 @@ uint8_t LEDStrip_SetAll(LED_Strip* LEDStrip, uint16_t Red, uint16_t Green, uint1
 uint8_t LEDStrip_SetPercentageAll(LED_Strip* LEDStrip, uint8_t Red, uint8_t Green, uint8_t Blue, uint8_t White);
 
 uint8_t LEDStrip_Set(LED_Strip* LEDStrip, LED_StripColor Color, uint16_t Value);
+
+uint8_t LEDStrip_ColorIsOn(LED_Strip* LEDStrip, LED_StripColor Color);
 
 #endif /* LED_STRIP_H_ */

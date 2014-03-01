@@ -110,13 +110,13 @@ uint8_t LEDStrip_SetAll(LED_Strip* LEDStrip, uint16_t Red, uint16_t Green, uint1
 {
 	if (Red <= ledStripMAX_PERIOD && Green <= ledStripMAX_PERIOD && Blue <= ledStripMAX_PERIOD && White <= ledStripMAX_PERIOD)
 	{
-		/* Try to take the mutex */
+		/* Try to take the semaphore */
 		xSemaphoreTake(LEDStrip->xSemaphore, portMAX_DELAY);
 		TIM_SetCompare1(LEDStrip->Timer, Red);
 		TIM_SetCompare2(LEDStrip->Timer, Green);
 		TIM_SetCompare3(LEDStrip->Timer, Blue);
 		TIM_SetCompare4(LEDStrip->Timer, White);
-		/* Give back the mutex */
+		/* Release the semaphore */
 		xSemaphoreGive(LEDStrip->xSemaphore);
 
 		return 1;
@@ -141,13 +141,13 @@ uint8_t LEDStrip_SetPercentageAll(LED_Strip* LEDStrip, uint8_t Red, uint8_t Gree
 {
 	if (Red <= 100 && Green <= 100 && Blue <= 100 && White <= 100)
 	{
-		/* Try to take the mutex */
+		/* Try to take the semaphore */
 		xSemaphoreTake(LEDStrip->xSemaphore, portMAX_DELAY);
 		TIM_SetCompare1(LEDStrip->Timer, Red/100 * ledStripMAX_PERIOD);
 		TIM_SetCompare2(LEDStrip->Timer, Green/100 * ledStripMAX_PERIOD);
 		TIM_SetCompare3(LEDStrip->Timer, Blue/100 * ledStripMAX_PERIOD);
 		TIM_SetCompare4(LEDStrip->Timer, White/100 * ledStripMAX_PERIOD);
-		/* Give back the mutex */
+		/* Release the semaphore */
 		xSemaphoreGive(LEDStrip->xSemaphore);
 
 		return 1;
@@ -170,8 +170,6 @@ uint8_t LEDStrip_Set(LED_Strip* LEDStrip, LED_StripColor Color, uint16_t Value)
 {
 	if (Value <= ledStripMAX_PERIOD && Color <= WHITE)
 	{
-		/* Try to take the mutex */
-		xSemaphoreTake(LEDStrip->xSemaphore, portMAX_DELAY);
 		switch (Color)
 		{
 			case RED:
@@ -187,13 +185,38 @@ uint8_t LEDStrip_Set(LED_Strip* LEDStrip, LED_StripColor Color, uint16_t Value)
 				TIM_SetCompare4(LEDStrip->Timer, Value);
 				break;
 		}
-		/* Give back the mutex */
-		xSemaphoreGive(LEDStrip->xSemaphore);
-
 		return 1;
 	}
 	else
 	{
 		return 0;
 	}
+}
+
+/**
+ * @brief	Check if a color for the LED strip is on
+ * @param	LEDStrip: 	Struct with info about the led strip
+ * @param	Color: 		The color to check
+ * @retval	1:			Color is on
+ * @retval	0:			Color is off
+ */
+uint8_t LEDStrip_ColorIsOn(LED_Strip* LEDStrip, LED_StripColor Color)
+{
+	uint8_t result = 0;
+	switch (Color)
+	{
+		case RED:
+			result = (LEDStrip->Timer->CCR1 != 0);
+			break;
+		case GREEN:
+			result = (LEDStrip->Timer->CCR2 != 0);
+			break;
+		case BLUE:
+			result = (LEDStrip->Timer->CCR3 != 0);
+			break;
+		case WHITE:
+			result = (LEDStrip->Timer->CCR4 != 0);
+			break;
+	}
+	return result;
 }
