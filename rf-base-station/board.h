@@ -16,7 +16,7 @@
 #include "stm32f10x.h"
 
 #include "common.h"
-#include "input-output/outstream.h"
+#include "outstream/outstream.h"
 
 #include "rf_usart2_usb.h"
 #include "rf_usart1.h"
@@ -47,13 +47,13 @@ void BOARD_Init()
 	LED_AllOff();
 
 	RF_USART2_USB_Init();
-	RF_USART1_Init();
-	RF_I2C2_Init();
+//	RF_USART1_Init();
+//	RF_I2C2_Init();
 
-	EEPROM.Address = 0x50;
-	EEPROM_Init(&EEPROM);
+//	EEPROM.Address = 0x50;
+//	EEPROM_Init(&EEPROM);
 
-#ifdef NRF24L01
+#if 1
 	/* nRF24L01_1 */
 	NRF24L01_1.NRF24L01_DeviceName	= "1";
 	NRF24L01_1.CSN_Pin 				= GPIO_Pin_4;
@@ -82,7 +82,8 @@ void BOARD_Init()
 	NRF24L01_SetRxPipeAddress(&NRF24L01_1, 5, DEVICE_1_5_ADDRESS);
 
 	NRF24L01_SetTxAddress(&NRF24L01_1, DEVICE_0_1_ADDRESS);	// Will change depending on who you want to talk to
-
+#endif
+#if 1
 	/* nRF24L01_2 */
 	NRF24L01_2.NRF24L01_DeviceName	= "2";
 	NRF24L01_2.CSN_Pin 				= GPIO_Pin_12;
@@ -106,9 +107,9 @@ void BOARD_Init()
 	NRF24L01_SetTxAddress(&NRF24L01_2, DEVICE_1_4_ADDRESS);
 #endif /* NRF24L01 */
 
-	WAKE_UP_BUTTON_Init();
-
-	WATCHDOG_Init(2000);
+//	WAKE_UP_BUTTON_Init();
+//
+//	WATCHDOG_Init(2000);
 }
 
 

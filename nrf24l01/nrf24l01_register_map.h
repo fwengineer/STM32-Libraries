@@ -40,7 +40,7 @@
 #define RF_SETUP    0x06
 #define STATUS      0x07
 #define OBSERVE_TX  0x08
-#define CD          0x09
+#define RPD         0x09
 #define RX_ADDR_P0  0x0A
 #define RX_ADDR_P1  0x0B
 #define RX_ADDR_P2  0x0C
@@ -55,8 +55,9 @@
 #define RX_PW_P4    0x15
 #define RX_PW_P5    0x16
 #define FIFO_STATUS 0x17
+#define DYNPD		0x1C
 
-#define IS_VALID_REGISTER(REGISTER)		((REGISTER) >= CONFIG && (REGISTER) <= FIFO_STATUS)
+#define IS_VALID_REGISTER(REGISTER)		((REGISTER) >= CONFIG && (REGISTER) <= DYNPD)
 
 /* Bit Names -----------------------------------------------------------------*/
 #define MASK_RX_DR  6

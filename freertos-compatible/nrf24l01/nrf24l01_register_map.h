@@ -3,7 +3,7 @@
  * @file	nrf24l01_register_map.h
  * @author	Hampus Sandberg
  * @version	0.1
- * @date	2014-03-01
+ * @date	2013-04-27
  * @brief	
  ******************************************************************************
  */
@@ -21,14 +21,14 @@
 #define COORDINATOR_0_ADDRESS	0xEBDFAC8070
 
 // Height 0 -> 1 Device
-#define DEVICE_0_1_ADDRESS	0XEBDFAC8071
+#define DEVICE_0_1_ADDRESS	0xEBDFAC8071
 
 // Height 1 -> 5 Devices
-#define DEVICE_1_1_ADDRESS	0XEBDFAC8171
-#define DEVICE_1_2_ADDRESS	0XEBDFAC8172
-#define DEVICE_1_3_ADDRESS	0XEBDFAC8173
-#define DEVICE_1_4_ADDRESS	0XEBDFAC8174
-#define DEVICE_1_5_ADDRESS	0XEBDFAC8175
+#define DEVICE_1_1_ADDRESS	0xEBDFAC8171
+#define DEVICE_1_2_ADDRESS	0xEBDFAC8172
+#define DEVICE_1_3_ADDRESS	0xEBDFAC8173
+#define DEVICE_1_4_ADDRESS	0xEBDFAC8174
+#define DEVICE_1_5_ADDRESS	0xEBDFAC8175
 
 /* Register Map --------------------------------------------------------------*/
 #define CONFIG      0x00
@@ -40,7 +40,7 @@
 #define RF_SETUP    0x06
 #define STATUS      0x07
 #define OBSERVE_TX  0x08
-#define CD          0x09
+#define RPD         0x09
 #define RX_ADDR_P0  0x0A
 #define RX_ADDR_P1  0x0B
 #define RX_ADDR_P2  0x0C
@@ -55,8 +55,9 @@
 #define RX_PW_P4    0x15
 #define RX_PW_P5    0x16
 #define FIFO_STATUS 0x17
+#define DYNPD		0x1C
 
-#define IS_VALID_REGISTER(REGISTER)		((REGISTER) >= CONFIG && (REGISTER) <= FIFO_STATUS)
+#define IS_VALID_REGISTER(REGISTER)		((REGISTER) >= CONFIG && (REGISTER) <= DYNPD)
 
 /* Bit Names -----------------------------------------------------------------*/
 #define MASK_RX_DR  6

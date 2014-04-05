@@ -1,33 +1,31 @@
 /**
  ******************************************************************************
- * @file	spi2.c
+ * @file	spi1.c
  * @author	Hampus Sandberg
  * @version	0.1
- * @date	2014-03-01
+ * @date	2014-03-27
  * @brief
- * @note	If a spi function is called from an IRQ, that IRQ has to have a
- * 			lower priority than the SPI IRQ
  ******************************************************************************
  */
 
 /* TODO: Fix overhead issues from the standard library functions */
 
 /* Includes ------------------------------------------------------------------*/
-#include "spi2.h"
+#include "spi1.h"
 
 /* Private defines -----------------------------------------------------------*/
-#define SPI_NO		2
-#define SPIx		(SPI2)
-#define SPIx_IRQn	(SPI2_IRQn)
-#define SCK_Pin		(GPIO_Pin_13)
-#define MISO_Pin	(GPIO_Pin_14)
-#define MOSI_Pin	(GPIO_Pin_15)
+#define SPI_NO		1
+#define SPIx		(SPI1)
+#define SPIx_IRQn	(SPI1_IRQn)
+#define SCK_Pin		(GPIO_Pin_5)
+#define MISO_Pin	(GPIO_Pin_6)
+#define MOSI_Pin	(GPIO_Pin_7)
 
 /* Private variables ---------------------------------------------------------*/
-SemaphoreHandle_t xTxSemaphore_2 = NULL;
-SemaphoreHandle_t xRxSemaphore_2 = NULL;
+SemaphoreHandle_t xTxSemaphore_1 = NULL;
+SemaphoreHandle_t xRxSemaphore_1 = NULL;
 
-uint8_t receivedByte_2 = 0;
+uint8_t receivedByte_1 = 0;
 
 /* Private functions ---------------------------------------------------------*/
 /* Functions -----------------------------------------------------------------*/
@@ -36,16 +34,16 @@ uint8_t receivedByte_2 = 0;
  * @param	None
  * @retval	None
  */
-void SPI2_Init()
+void SPI1_Init()
 {
 	/* Create the binary semaphores */
-	xTxSemaphore_2 = xSemaphoreCreateBinary();
-	xRxSemaphore_2 = xSemaphoreCreateBinary();
+	xTxSemaphore_1 = xSemaphoreCreateBinary();
+	xRxSemaphore_1 = xSemaphoreCreateBinary();
 	/* TODO: Check if this is needed because the semaphore has to be given before it can be taken */
-//	xSemaphoreGive(xTxSemaphore_2);
+//	xSemaphoreGive(xTxSemaphore_1);
 
 	/* Enable GPIOx clock */
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
 
 	/* NVIC Configuration */
@@ -61,16 +59,17 @@ void SPI2_Init()
 	GPIO_InitStructure.GPIO_Pin   			= SCK_Pin | MOSI_Pin;
 	GPIO_InitStructure.GPIO_Speed 			= GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode  			= GPIO_Mode_AF_PP;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	/* Configure SPIx-MISO input floating */
 	GPIO_InitStructure.GPIO_Pin   			= MISO_Pin;
 	GPIO_InitStructure.GPIO_Speed 			= GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode  			= GPIO_Mode_IN_FLOATING;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+
 
 	/* Enable SPIx Peripheral clock */
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1, ENABLE);
 
 	/* Initialize SPIx */
 	SPI_InitTypeDef SPI_InitStructure;
@@ -100,26 +99,21 @@ void SPI2_Init()
  * @param	Data: data to be written to the SPI
  * @retval	The received data
  */
-uint8_t SPI2_WriteRead(uint8_t Data)
+uint8_t SPI1_WriteRead(uint8_t Data)
 {
-	/* Loop while DR register is not empty */
-	//while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_TXE) == RESET);
-
 	/* Enable SPI_MASTER TXE interrupt */
 	SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, ENABLE);
 	/* Try to take the TX Semaphore */
-	xSemaphoreTake(xTxSemaphore_2, portMAX_DELAY);
+	xSemaphoreTake(xTxSemaphore_1, portMAX_DELAY);
 
 	/* Send byte through the SPIx peripheral */
 	SPI_I2S_SendData(SPIx, (uint16_t)Data);
 
-	/* Wait to receive a byte */
-	//while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_RXNE) == RESET);
 	/* Try to take the RX Semaphore */
-	xSemaphoreTake(xRxSemaphore_2, portMAX_DELAY);
+	xSemaphoreTake(xRxSemaphore_1, portMAX_DELAY);
 
 	/* Return the byte read from the SPI bus */
-	return receivedByte_2;
+	return receivedByte_1;
 }
 
 /**
@@ -127,15 +121,13 @@ uint8_t SPI2_WriteRead(uint8_t Data)
  * @param	Data: data to be written to the SPI
  * @retval	None
  */
-void SPI2_Write(uint8_t Data)
+void SPI1_Write(uint8_t Data)
 {
-	/* Loop while DR register is not empty */
-	//while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_TXE) == RESET);
 
 	/* Enable SPI_MASTER TXE interrupt */
 	SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, ENABLE);
 	/* Try to take the TX Semaphore */
-	xSemaphoreTake(xTxSemaphore_2, portMAX_DELAY);
+	xSemaphoreTake(xTxSemaphore_1, portMAX_DELAY);
 
 	/* Send byte through the SPIx peripheral */
 	SPI_I2S_SendData(SPIx, (uint16_t)Data);
@@ -155,7 +147,7 @@ void SPI1_IRQHandler(void)
 	if (SPI_I2S_GetITStatus(SPIx, SPI_I2S_IT_TXE) != RESET)
 	{
 		/* Release the semaphore */
-		xSemaphoreGiveFromISR(xTxSemaphore_2, &xHigherPriorityTaskWoken);
+		xSemaphoreGiveFromISR(xTxSemaphore_1, &xHigherPriorityTaskWoken);
 		/* Disable SPI_MASTER TXE interrupt */
 		SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, DISABLE);
 	}
@@ -163,9 +155,9 @@ void SPI1_IRQHandler(void)
 	else if (SPI_I2S_GetITStatus(SPIx, SPI_I2S_IT_RXNE) != RESET)
 	{
 		/* Release the semaphore */
-		xSemaphoreGiveFromISR(xRxSemaphore_2, &xHigherPriorityTaskWoken);
+		xSemaphoreGiveFromISR(xRxSemaphore_1, &xHigherPriorityTaskWoken);
 		/* Read the byte received in order to clear the interrupt flag */
-		receivedByte_2 = SPI_I2S_ReceiveData(SPIx);
+		receivedByte_1 = SPI_I2S_ReceiveData(SPIx);
 	}
 
 	if (xHigherPriorityTaskWoken != pdFALSE)

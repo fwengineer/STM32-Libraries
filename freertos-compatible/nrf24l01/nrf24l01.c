@@ -3,7 +3,7 @@
  * @file	nrf24l01.c
  * @author	Hampus Sandberg
  * @version	0.1
- * @date	2014-03-01
+ * @date	2013-04-27
  * @brief	
  ******************************************************************************
  */
@@ -15,17 +15,34 @@ TODO:
 */
 
 /* Includes ------------------------------------------------------------------*/
-
-
+#include "FreeRTOS.h"
+#include "task.h"
 #include "nrf24l01_register_map.h"
 #include "nrf24l01.h"
 
+#include "usart/usart2.h"
+#include "outstream/outstream.h"
+
 /* Private defines -----------------------------------------------------------*/
-#define prvTxPowerup(DEVICE)			prvWriteRegisterOneByte(DEVICE, CONFIG, CONFIG_VALUE | ((1 << PWR_UP) | (0 << PRIM_RX)))
-#define prvRxPowerup(DEVICE)			prvWriteRegisterOneByte(DEVICE, CONFIG, CONFIG_VALUE | ((1 << PWR_UP) | (1 << PRIM_RX)))
-#define prvResetStatus(DEVICE)			prvWriteRegisterOneByte(DEVICE, STATUS, (1 << TX_DS) | (1 << MAX_RT))
-#define prvResetStatusRxDr(DEVICE)  	prvWriteRegisterOneByte(DEVICE, STATUS, (1 << RX_DR))
-#define prvResetStatusAll(DEVICE)		prvWriteRegisterOneByte(DEVICE, STATUS, (1 << TX_DS) | (1 << MAX_RT) | (1 << RX_DR))
+/* TODO: Replace */
+uint32_t millis() { return (xTaskGetTickCount() / portTICK_PERIOD_MS); }
+
+
+//#if !defined(IRQ_PIN) && !defined(IRQ_DDR) && !defined(IRQ_PORT) && !defined(INTERRUPT_VECTOR) && !defined(IRQ_INTERRUPT)
+//#error "Please define IRQ_PIN, IRQ_DDR, IRQ_PORT, INTERRUPT_VECTOR, IRQ_INTERRUPT in project properties"
+//#endif
+// #define IRQ_PIN				PORTD2	// INT0
+// #define IRQ_DDR				DDRD
+// #define IRQ_PORT			PORTD
+// #define INTERRUPT_VECTOR	INT1_vect
+// #define IRQ_INTERRUPT		1
+
+
+#define TxPowerup(DEVICE)				prvWriteRegisterOneByte(DEVICE, CONFIG, CONFIG_VALUE | ((1 << PWR_UP) | (0 << PRIM_RX)))
+#define RxPowerup(DEVICE)				prvWriteRegisterOneByte(DEVICE, CONFIG, CONFIG_VALUE | ((1 << PWR_UP) | (1 << PRIM_RX)))
+#define ResetStatus(DEVICE)				prvWriteRegisterOneByte(DEVICE, STATUS, (1 << TX_DS) | (1 << MAX_RT))
+#define ResetStatusRxDr(DEVICE)  		prvWriteRegisterOneByte(DEVICE, STATUS, (1 << RX_DR))
+#define ResetStatusAll(DEVICE)			prvWriteRegisterOneByte(DEVICE, STATUS, (1 << TX_DS) | (1 << MAX_RT) | (1 << RX_DR))
 
 #define IsValidPipe(PIPE)				((PIPE) < 6)
 #define GetPipeNumber(DEVICE) 			(((NRF24L01_GetStatus(DEVICE)) & 0xF) >> 1)
@@ -33,8 +50,7 @@ TODO:
 
 #define DEFAULT_CHANNEL		66
 
-//#define CONFIG_VALUE		((1 << MASK_RX_DR) | (1 << EN_CRC) | (0 << CRCO))
-#define CONFIG_VALUE		((1 << EN_CRC) | (0 << CRCO))		 // Test with RX data ready interrupt
+#define CONFIG_VALUE		((1 << EN_CRC) | (0 << CRCO))
 
 #define TIMEOUT_WRITE		500
 #define TX_MODE_TIMEOUT		500
@@ -44,11 +60,11 @@ TODO:
 
 /* Private variables ---------------------------------------------------------*/
 /* Private Function Prototypes -----------------------------------------------*/
-static void prvEnableRf(NRF24L01_Device* Device) { GPIO_SetBits(Device->CE.GPIO, Device->CE.GPIO_Pin); }
-static void prvDisableRf(NRF24L01_Device* Device) { GPIO_ResetBits(Device->CE.GPIO, Device->CE.GPIO_Pin); }
+static void enableRf(NRF24L01_Device* Device) { GPIO_SetBits(Device->CE_GPIO, Device->CE_Pin); }
+static void disableRf(NRF24L01_Device* Device) { GPIO_ResetBits(Device->CE_GPIO, Device->CE_Pin); }
 
-static void prvSelectNrf24l01(NRF24L01_Device* Device) { GPIO_ResetBits(Device->CSN.GPIO, Device->CSN.GPIO_Pin); }
-static void prvDeselectNrf24l01(NRF24L01_Device* Device) { GPIO_SetBits(Device->CSN.GPIO, Device->CSN.GPIO_Pin); }
+static void selectNrf24l01(NRF24L01_Device* Device) { GPIO_ResetBits(Device->CSN_GPIO, Device->CSN_Pin); }
+static void deselectNrf24l01(NRF24L01_Device* Device) { GPIO_SetBits(Device->CSN_GPIO, Device->CSN_Pin); }
 
 static void prvWriteRegisterOneByte(NRF24L01_Device* Device, uint8_t Register, uint8_t Data);
 static void prvReadRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* Storage, uint8_t ByteCount);
@@ -74,68 +90,65 @@ static void prvPowerUpTx(NRF24L01_Device* Device);
 void NRF24L01_Init(NRF24L01_Device* Device)
 {
 	Device->ChecksumErrors = 0;
-
+	
 	uint8_t i;
-	for (i = 0; i < MAX_PIPES; i++)
-	{
-		CIRC_BUFFER_Init(&Device->RxPipeBuffer[i]);
-	}
-
+	for (i = 0; i < MAX_PIPES; i++) { CIRC_BUFFER_Init(&Device->RxPipeBuffer[i]); }
+	
 	GPIO_InitTypeDef GPIO_InitStructure;
 
 	/* Initialize CE (Chip Enable) pin */
-	if (Device->CE.GPIO == GPIOA)
+	if (Device->CE_GPIO == GPIOA)
 		RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
-	else if (Device->CE.GPIO == GPIOB)
+	else if (Device->CE_GPIO == GPIOB)
 		RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
 
 	GPIO_InitStructure.GPIO_Mode 		= GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Pin 		= Device->CE.GPIO_Pin;
+	GPIO_InitStructure.GPIO_Pin 		= Device->CE_Pin;
 	GPIO_InitStructure.GPIO_Speed 		= GPIO_Speed_50MHz;
-	GPIO_Init(Device->CE.GPIO, &GPIO_InitStructure);
+	GPIO_Init(Device->CE_GPIO, &GPIO_InitStructure);
 
 	/* Initialize CSN (Chip select) pin */
-	if (Device->CSN.GPIO == GPIOA)
+	if (Device->CSN_GPIO == GPIOA)
 		RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
-	else if (Device->CSN.GPIO == GPIOB)
+	else if (Device->CSN_GPIO == GPIOB)
 		RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
 
 	GPIO_InitStructure.GPIO_Mode 		= GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Pin 		= Device->CSN.GPIO_Pin;
+	GPIO_InitStructure.GPIO_Pin 		= Device->CSN_Pin;
 	GPIO_InitStructure.GPIO_Speed 		= GPIO_Speed_50MHz;
-	GPIO_Init(Device->CSN.GPIO, &GPIO_InitStructure);
+	GPIO_Init(Device->CSN_GPIO, &GPIO_InitStructure);
 
-	prvDisableRf(Device);
-	prvDeselectNrf24l01(Device);
+	disableRf(Device);
+	deselectNrf24l01(Device);
 
 	/* Initialize IRQ (Interrupt) pin */
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
-	if (Device->INT.GPIO == GPIOA)
+	if (Device->IRQ_GPIO == GPIOA)
 		RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
-	else if (Device->INT.GPIO == GPIOB)
+	else if (Device->IRQ_GPIO == GPIOB)
 		RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
 
 	GPIO_InitStructure.GPIO_Mode 		= GPIO_Mode_IN_FLOATING;
-	GPIO_InitStructure.GPIO_Pin 		= Device->INT.GPIO_Pin;
+	GPIO_InitStructure.GPIO_Pin 		= Device->IRQ_Pin;
 	GPIO_InitStructure.GPIO_Speed 		= GPIO_Speed_50MHz;
-	GPIO_Init(Device->INT.GPIO, &GPIO_InitStructure);
+	GPIO_Init(Device->IRQ_GPIO, &GPIO_InitStructure);
 
 	/* Initialize interrupt */
 	/* Connect EXTIx Line to IRQ pin */
-	GPIO_EXTILineConfig(Device->INT.IRQ_GPIO_PortSource, Device->INT.IRQ_GPIO_PinSource);
+	GPIO_EXTILineConfig(Device->IRQ_GPIO_PortSource, Device->IRQ_GPIO_PinSource);
 
 	EXTI_InitTypeDef EXTI_InitStructure;
-	EXTI_InitStructure.EXTI_Line 		= Device->INT.IRQ_EXTI_Line;
+	EXTI_InitStructure.EXTI_Line 		= Device->IRQ_EXTI_Line;
 	EXTI_InitStructure.EXTI_LineCmd 	= ENABLE;
 	EXTI_InitStructure.EXTI_Mode 		= EXTI_Mode_Interrupt;
 	EXTI_InitStructure.EXTI_Trigger 	= EXTI_Trigger_Falling;
 	EXTI_Init(&EXTI_InitStructure);
 
-	/* Enable and set EXTIx Interrupt to the lowest priority */
+	/* Enable EXTIx Interrupt. The SPIx interrupt has to be higher than this so set EXTIx to the lowest priority*/
 	NVIC_InitTypeDef NVIC_InitStructure;
-	NVIC_InitStructure.NVIC_IRQChannel 						= Device->INT.IRQ_NVIC_IRQChannel;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority 	= 0x0F;
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority 			= 0x00;
+	NVIC_InitStructure.NVIC_IRQChannel 						= Device->IRQ_NVIC_IRQChannel;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority 	= configLIBRARY_LOWEST_INTERRUPT_PRIORITY;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority 			= 0;
 	NVIC_InitStructure.NVIC_IRQChannelCmd 					= ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
 
@@ -143,7 +156,7 @@ void NRF24L01_Init(NRF24L01_Device* Device)
 	Device->SPIx_Init();
 
 	/* Set channel */
-	NRF24L01_SetRFChannel(Device, DEFAULT_CHANNEL);
+//	NRF24L01_SetRFChannel(Device, DEFAULT_CHANNEL);
 
 	/* Set length of incoming payload */
 	prvWriteRegisterOneByte(Device, RX_PW_P0, PAYLOAD_SIZE);
@@ -152,21 +165,23 @@ void NRF24L01_Init(NRF24L01_Device* Device)
 	prvWriteRegisterOneByte(Device, RX_PW_P3, PAYLOAD_SIZE);
 	prvWriteRegisterOneByte(Device, RX_PW_P4, PAYLOAD_SIZE);
 	prvWriteRegisterOneByte(Device, RX_PW_P5, PAYLOAD_SIZE);
-
+	
 	// Enable all RX pipes
 	NRF24L01_EnablePipes(Device, ALL_PIPES);
 
 	// Flush buffers
 	prvFlushTX(Device);
 	prvFlushRX(Device);
-	prvResetStatusAll(Device);
+	ResetStatusAll(Device);
 
 	// Start receiver
-	Device->InTxMode = False;		/* Start in receiving mode */
-	prvRxPowerup(Device);			/* Power up in receiving mode */
-	prvEnableRf(Device);			/* Listening for packets */
+//	Device->InTxMode = False;	/* Start in receiving mode */
+//	RxPowerup(Device);			/* Power up in receiving mode */
+//	enableRf(Device);			/* Listening for pakets */
 
-	Device->Initialized = 1;
+	prvResetToRx(Device);
+
+	Device->Initialized = True;
 }
 
 /**
@@ -194,23 +209,23 @@ void NRF24L01_WritePayload(NRF24L01_Device* Device, uint8_t* Data, uint8_t DataC
     		prvPowerUpRx(Device);
     	}
     }
-
+	
 	uint8_t checksum = NRF24L01_GetChecksum(Device, Data, DataCount);
-
-    prvDisableRf(Device);
+	
+    disableRf(Device);
 	prvPowerUpTx(Device);
 	prvFlushTX(Device);
-
-    prvSelectNrf24l01(Device);
+    
+    selectNrf24l01(Device);
     Device->SPIx_Write(W_TX_PAYLOAD);
 	Device->SPIx_Write(DataCount);	// Write data count
 	uint8_t i;
 	for (i = 0; i < DataCount; i++) Device->SPIx_Write(Data[i]);		// Write data
 	Device->SPIx_Write(checksum);	// Write checksum
 	for (i++; i <= MAX_DATA_COUNT; i++) Device->SPIx_Write(PAYLOAD_FILLER_DATA);	// Fill the rest of the payload
-    prvDeselectNrf24l01(Device);
-
-    prvEnableRf(Device);
+    deselectNrf24l01(Device);
+    
+    enableRf(Device);
 }
 
 
@@ -239,17 +254,17 @@ void NRF24L01_Write(NRF24L01_Device* Device, uint8_t* Data, uint8_t DataCount)
 		{
 			tempData[i - payloadCount * (MAX_DATA_COUNT)] = Data[i];
 			tempDataCount++;
-
+				
 			if (tempDataCount == MAX_DATA_COUNT)
 			{
 				NRF24L01_WritePayload(Device, tempData, tempDataCount);
 				tempDataCount = 0;
 				payloadCount += 1;
-
+				
 				// ERROR: Doesn't seem to work if DataCount > 60
 			}
 		}
-
+			
 		// If it wasn't a multiple of MAX_DATA_COUNT write the rest
 		if (tempDataCount)
 		{
@@ -269,30 +284,35 @@ void NRF24L01_Write(NRF24L01_Device* Device, uint8_t* Data, uint8_t DataCount)
  */
 uint8_t NRF24L01_SetRxPipeAddressSeparated(NRF24L01_Device* Device, uint8_t Pipe, uint32_t AddressMSBytes, uint8_t AddressLSByte)
 {
+	uint8_t status;
+
 	if (Pipe <= 1)
 	{
-		prvSelectNrf24l01(Device);
-		uint8_t status = Device->SPIx_WriteRead(W_REGISTER | (RX_ADDR_P0 + Pipe));
+		selectNrf24l01(Device);
+		status = Device->SPIx_WriteRead(W_REGISTER | (RX_ADDR_P0 + Pipe));
 		Device->SPIx_Write(AddressLSByte);
 		uint8_t i;
 		for (i = 0; i < 4; i++)
 		{
 			Device->SPIx_Write((AddressMSBytes >> 8*i) & 0xFF);
 		}
-		prvDeselectNrf24l01(Device);
-
-		return status;
+		deselectNrf24l01(Device);
 	}
 	else if (IsValidPipe(Pipe))
 	{
-		prvSelectNrf24l01(Device);
-		uint8_t status = Device->SPIx_WriteRead(W_REGISTER | (RX_ADDR_P0 + Pipe));
+		selectNrf24l01(Device);
+		status = Device->SPIx_WriteRead(W_REGISTER | (RX_ADDR_P0 + Pipe));
 		Device->SPIx_Write(AddressLSByte);	// MSByte of address in pipe 2 to 5 is equal to RX_ADDR_P1[39:8]
-		prvDeselectNrf24l01(Device);
-
-		return status;
+		deselectNrf24l01(Device);
 	}
-	return 0;
+	else
+	{
+		status = 0;
+	}
+
+	/* TODO: Check if there's a timing problem */
+	vTaskDelay(10 / portTICK_PERIOD_MS);
+	return status;
 }
 
 /**
@@ -304,7 +324,7 @@ uint8_t NRF24L01_SetRxPipeAddressSeparated(NRF24L01_Device* Device, uint8_t Pipe
  */
 uint8_t NRF24L01_SetTxAddressSeparated(NRF24L01_Device* Device, uint32_t AddressMSBytes, uint8_t AddressLSByte)
 {
-	prvSelectNrf24l01(Device);
+	selectNrf24l01(Device);
 	uint8_t status = Device->SPIx_WriteRead(W_REGISTER | TX_ADDR);
 	Device->SPIx_WriteRead(AddressLSByte);
 	uint8_t i;
@@ -312,7 +332,10 @@ uint8_t NRF24L01_SetTxAddressSeparated(NRF24L01_Device* Device, uint32_t Address
 	{
 		Device->SPIx_WriteRead((AddressMSBytes >> 8*i) & 0xFF);
 	}
-	prvDeselectNrf24l01(Device);
+	deselectNrf24l01(Device);
+	
+	/* TODO: Check if there's a timing problem */
+	vTaskDelay(10 / portTICK_PERIOD_MS);
 
 	return status;
 }
@@ -328,10 +351,10 @@ uint8_t NRF24L01_SetRFChannel(NRF24L01_Device* Device, uint8_t Channel)
 {
 	if (Channel <= 125)
 	{
-		prvSelectNrf24l01(Device);
+		selectNrf24l01(Device);
 		Device->SPIx_WriteRead(W_REGISTER | RF_CH);
 		Device->SPIx_WriteRead(Channel);
-		prvDeselectNrf24l01(Device);
+		deselectNrf24l01(Device);
 
 		return 1;
 	}
@@ -346,10 +369,10 @@ uint8_t NRF24L01_SetRFChannel(NRF24L01_Device* Device, uint8_t Channel)
  */
 uint8_t NRF24L01_GetStatus(NRF24L01_Device* Device)
 {
-	prvSelectNrf24l01(Device);
+	selectNrf24l01(Device);
 	uint8_t status = Device->SPIx_WriteRead(0);
-	prvDeselectNrf24l01(Device);
-
+	deselectNrf24l01(Device);
+	
 	return status;
 }
 
@@ -391,7 +414,7 @@ void NRF24L01_EnablePipes(NRF24L01_Device* Device, uint8_t Pipes)
 	{
 		uint8_t pipeValue;
 		prvReadRegister(Device, EN_RXADDR, &pipeValue, 1);
-
+		
 		pipeValue |= (Pipes);
 		prvWriteRegisterOneByte(Device, EN_RXADDR, pipeValue);
 	}
@@ -410,7 +433,7 @@ void NRF24L01_DisablePipes(NRF24L01_Device* Device, uint8_t Pipes)
 		uint8_t pipeValue;
 		prvReadRegister(Device, EN_RXADDR, &pipeValue, 1);
 		pipeValue &= ~(Pipes);
-
+		
 		prvWriteRegisterOneByte(Device, EN_RXADDR, pipeValue);
 	}
 }
@@ -500,81 +523,185 @@ uint16_t NRF24L01_GetChecksumErrors(NRF24L01_Device* Device)
  * @param	None
  * @retval	None
  */
-/*
 void NRF24L01_WriteDebugToUart(NRF24L01_Device* Device)
 {
-	UART_WriteString("------------\r");
-	uint8_t status = NRF24L01_GetStatus(Device);
-	UART_WriteString("Status: ");
-	UART_WriteHexByte(status, 1);
-	UART_WriteString("\r");
+	OUT_WriteString(&USART2_Device, "------------\r");
+	OUT_WriteString(&USART2_Device, "Name: ");
+	OUT_WriteString(&USART2_Device, Device->NRF24L01_DeviceName);
+	OUT_WriteString(&USART2_Device, "\r");
 	
+	/* ============================ */
 	uint8_t pipe = NRF24L01_GetPipeNumber(Device);
-	UART_WriteString("Pipe: ");
-	UART_WriteUintAsString(pipe);
-	UART_WriteString("\r");
-	
+	OUT_WriteString(&USART2_Device, "Pipe: ");
+	OUT_WriteNumber(&USART2_Device, pipe, 0);
+	OUT_WriteString(&USART2_Device, "\r");
+
+
+	/* ============================ */
+	uint8_t config;
+	prvReadRegister(Device, CONFIG, &config, 1);
+	OUT_WriteString(&USART2_Device, "CONFIG: ");
+	OUT_WriteHexByte(&USART2_Device, config, 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
+	uint8_t en_aa;
+	prvReadRegister(Device, EN_AA, &en_aa, 1);
+	OUT_WriteString(&USART2_Device, "EN_AA: ");
+	OUT_WriteHexByte(&USART2_Device, en_aa, 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
 	uint8_t en_rxaddr;
-	readRegister(Device, EN_RXADDR, &en_rxaddr, 1);
-	UART_WriteString("EN_RXADDR: ");
-	UART_WriteHexByte(en_rxaddr, 1);
-	UART_WriteString("\r");
+	prvReadRegister(Device, EN_RXADDR, &en_rxaddr, 1);
+	OUT_WriteString(&USART2_Device, "EN_RXADDR: ");
+	OUT_WriteHexByte(&USART2_Device, en_rxaddr, 1);
+	OUT_WriteString(&USART2_Device, "\r");
 
-	uint8_t addrTx[5];
-	readRegister(Device, TX_ADDR, addrTx, 5);
-	UART_WriteString("TX_ADDR: ");
-	UART_WriteHexByte(addrTx[0], 1);
-	UART_WriteHexByte(addrTx[1], 0);
-	UART_WriteHexByte(addrTx[2], 0);
-	UART_WriteHexByte(addrTx[3], 0);
-	UART_WriteHexByte(addrTx[4], 0);
-	UART_WriteString("\r");
+	/* ============================ */
+	uint8_t setupAw;
+	prvReadRegister(Device, SETUP_AW, &setupAw, 1);
+	OUT_WriteString(&USART2_Device, "SETUP_AW: ");
+	OUT_WriteHexByte(&USART2_Device, setupAw, 1);
+	OUT_WriteString(&USART2_Device, "\r");
 
+	/* ============================ */
+	uint8_t setupRetr;
+	prvReadRegister(Device, SETUP_RETR, &setupRetr, 1);
+	OUT_WriteString(&USART2_Device, "SETUP_RETR: ");
+	OUT_WriteHexByte(&USART2_Device, setupRetr, 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
+	uint8_t rfChannel;
+	prvReadRegister(Device, RF_CH, &rfChannel, 1);
+	OUT_WriteString(&USART2_Device, "RF_CH: ");
+	OUT_WriteHexByte(&USART2_Device, rfChannel, 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
+	uint8_t rfSetup;
+	prvReadRegister(Device, RF_SETUP, &rfSetup, 1);
+	OUT_WriteString(&USART2_Device, "RF_SETUP: ");
+	OUT_WriteHexByte(&USART2_Device, rfSetup, 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
+	uint8_t status = NRF24L01_GetStatus(Device);
+	OUT_WriteString(&USART2_Device, "STATUS: ");
+	OUT_WriteHexByte(&USART2_Device, status, 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
+	uint8_t observeTx;
+	prvReadRegister(Device, OBSERVE_TX, &observeTx, 1);
+	OUT_WriteString(&USART2_Device, "OBSERVE_TX: ");
+	OUT_WriteHexByte(&USART2_Device, observeTx, 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
+	uint8_t rpd;
+	prvReadRegister(Device, RPD, &rpd, 1);
+	OUT_WriteString(&USART2_Device, "RPD: ");
+	OUT_WriteHexByte(&USART2_Device, rpd, 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
 	uint8_t addr0[5];
-	readRegister(Device, RX_ADDR_P0, addr0, 5);
-	UART_WriteString("RX_ADDR_P0: ");
-	UART_WriteHexByte(addr0[0], 1);
-	UART_WriteHexByte(addr0[1], 0);
-	UART_WriteHexByte(addr0[2], 0);
-	UART_WriteHexByte(addr0[3], 0);
-	UART_WriteHexByte(addr0[4], 0);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P0, addr0, 5);
+	OUT_WriteString(&USART2_Device, "RX_ADDR_P0-5: ");
+	OUT_WriteHexByte(&USART2_Device, addr0[0], 1);
+	OUT_WriteHexByte(&USART2_Device, addr0[1], 0);
+	OUT_WriteHexByte(&USART2_Device, addr0[2], 0);
+	OUT_WriteHexByte(&USART2_Device, addr0[3], 0);
+	OUT_WriteHexByte(&USART2_Device, addr0[4], 0);
 
 	uint8_t addr1[5];
-	readRegister(Device, RX_ADDR_P1, addr1, 5);
-	UART_WriteString("RX_ADDR_P1: ");
-	UART_WriteHexByte(addr1[0], 1);
-	UART_WriteHexByte(addr1[1], 0);
-	UART_WriteHexByte(addr1[2], 0);
-	UART_WriteHexByte(addr1[3], 0);
-	UART_WriteHexByte(addr1[4], 0);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P1, addr1, 5);
+	OUT_WriteString(&USART2_Device, ", ");
+	OUT_WriteHexByte(&USART2_Device, addr1[0], 1);
+	OUT_WriteHexByte(&USART2_Device, addr1[1], 0);
+	OUT_WriteHexByte(&USART2_Device, addr1[2], 0);
+	OUT_WriteHexByte(&USART2_Device, addr1[3], 0);
+	OUT_WriteHexByte(&USART2_Device, addr1[4], 0);
 
 	uint8_t addr2;
-	readRegister(Device, RX_ADDR_P2, &addr2, 1);
-	UART_WriteString("RX_ADDR_P2: ");
-	UART_WriteHexByte(addr2, 1);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P2, &addr2, 1);
+	OUT_WriteString(&USART2_Device, ", ");
+	OUT_WriteHexByte(&USART2_Device, addr2, 1);
 
 	uint8_t addr3;
-	readRegister(Device, RX_ADDR_P3, &addr3, 1);
-	UART_WriteString("RX_ADDR_P3: ");
-	UART_WriteHexByte(addr3, 1);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P3, &addr3, 1);
+	OUT_WriteString(&USART2_Device, ", ");
+	OUT_WriteHexByte(&USART2_Device, addr3, 1);
 
 	uint8_t addr4;
-	readRegister(Device, RX_ADDR_P4, &addr4, 1);
-	UART_WriteString("RX_ADDR_P4: ");
-	UART_WriteHexByte(addr4, 1);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P4, &addr4, 1);
+	OUT_WriteString(&USART2_Device, ", ");
+	OUT_WriteHexByte(&USART2_Device, addr4, 1);
 
 	uint8_t addr5;
-	readRegister(Device, RX_ADDR_P5, &addr5, 1);
-	UART_WriteString("RX_ADDR_P5: ");
-	UART_WriteHexByte(addr5, 1);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P5, &addr5, 1);
+	OUT_WriteString(&USART2_Device, ", ");
+	OUT_WriteHexByte(&USART2_Device, addr5, 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
+	uint8_t addrTx[5];
+	prvReadRegister(Device, TX_ADDR, addrTx, 5);
+	OUT_WriteString(&USART2_Device, "TX_ADDR: ");
+	OUT_WriteHexByte(&USART2_Device, addrTx[0], 1);
+	OUT_WriteHexByte(&USART2_Device, addrTx[1], 0);
+	OUT_WriteHexByte(&USART2_Device, addrTx[2], 0);
+	OUT_WriteHexByte(&USART2_Device, addrTx[3], 0);
+	OUT_WriteHexByte(&USART2_Device, addrTx[4], 0);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
+	uint8_t payloads[6];
+	prvReadRegister(Device, RX_PW_P0, &payloads[0], 1);
+	OUT_WriteString(&USART2_Device, "RX_PW_P0-5: ");
+	OUT_WriteHexByte(&USART2_Device, payloads[0], 1);
+
+	prvReadRegister(Device, RX_PW_P1, &payloads[1], 1);
+	OUT_WriteString(&USART2_Device, ", ");
+	OUT_WriteHexByte(&USART2_Device, payloads[1], 1);
+
+	prvReadRegister(Device, RX_PW_P2, &payloads[2], 1);
+	OUT_WriteString(&USART2_Device, ", ");
+	OUT_WriteHexByte(&USART2_Device, payloads[2], 1);
+
+	prvReadRegister(Device, RX_PW_P3, &payloads[3], 1);
+	OUT_WriteString(&USART2_Device, ", ");
+	OUT_WriteHexByte(&USART2_Device, payloads[3], 1);
+
+	prvReadRegister(Device, RX_PW_P4, &payloads[4], 1);
+	OUT_WriteString(&USART2_Device, ", ");
+	OUT_WriteHexByte(&USART2_Device, payloads[4], 1);
+
+	prvReadRegister(Device, RX_PW_P5, &payloads[5], 1);
+	OUT_WriteString(&USART2_Device, ", ");
+	OUT_WriteHexByte(&USART2_Device, payloads[5], 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
+	uint8_t fifoStatus;
+	prvReadRegister(Device, FIFO_STATUS, &fifoStatus, 1);
+	OUT_WriteString(&USART2_Device, "FIFO_STATUS: ");
+	OUT_WriteHexByte(&USART2_Device, fifoStatus, 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+	/* ============================ */
+	uint8_t dynpd;
+	prvReadRegister(Device, DYNPD, &dynpd, 1);
+	OUT_WriteString(&USART2_Device, "DYNPD: ");
+	OUT_WriteHexByte(&USART2_Device, dynpd, 1);
+	OUT_WriteString(&USART2_Device, "\r");
+
+
+	OUT_WriteString(&USART2_Device, "------------\r");
 }
-*/
+
 
 /* Private Functions ---------------------------------------------------------*/
 /**
@@ -588,11 +715,11 @@ static void prvWriteRegisterOneByte(NRF24L01_Device* Device, uint8_t Register, u
 {
 	if (IS_VALID_REGISTER(Register))
 	{
-		prvSelectNrf24l01(Device);
+		selectNrf24l01(Device);
 		Device->SPIx_WriteRead(W_REGISTER | (REGISTER_MASK & Register));
 		Device->SPIx_WriteRead(Data);
-		prvDeselectNrf24l01(Device);
-	}
+		deselectNrf24l01(Device);
+	}		
 }
 
 /**
@@ -609,15 +736,15 @@ static void prvReadRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* 
 	if (IS_VALID_REGISTER(Register))
 	{
 		uint8_t status = 0;
-		prvSelectNrf24l01(Device);
+		selectNrf24l01(Device);
 		status = Device->SPIx_WriteRead(R_REGISTER | Register);
 		uint8_t i;
 		for (i = 0; i < ByteCount; i++)
 		{
 			Storage[i] = Device->SPIx_WriteRead(0);
 		}
-		prvDeselectNrf24l01(Device);
-	}
+		deselectNrf24l01(Device);
+	}	
 }
 
 /**
@@ -632,15 +759,15 @@ static void prvWriteRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t*
 {
 	if (IS_VALID_REGISTER(Register))
 	{
-		prvSelectNrf24l01(Device);
+		selectNrf24l01(Device);
 		Device->SPIx_Write(W_REGISTER | Register);
 		uint8_t i;
 		for (i = 0; i < PAYLOAD_SIZE; i++)
 		{
 			Device->SPIx_WriteRead(Data[i]);
 		}
-		prvDeselectNrf24l01(Device);
-	}
+		deselectNrf24l01(Device);
+	}	
 }
 
 /**
@@ -650,9 +777,9 @@ static void prvWriteRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t*
  */
 static void prvFlushTX(NRF24L01_Device* Device)
 {
-	prvSelectNrf24l01(Device);
+	selectNrf24l01(Device);
 	Device->SPIx_WriteRead(FLUSH_TX);
-	prvDeselectNrf24l01(Device);
+	deselectNrf24l01(Device);
 }
 
 /**
@@ -662,9 +789,9 @@ static void prvFlushTX(NRF24L01_Device* Device)
  */
 static void prvFlushRX(NRF24L01_Device* Device)
 {
-	prvSelectNrf24l01(Device);
+	selectNrf24l01(Device);
 	Device->SPIx_WriteRead(FLUSH_RX);
-	prvDeselectNrf24l01(Device);
+	deselectNrf24l01(Device);
 }
 
 /**
@@ -674,12 +801,12 @@ static void prvFlushRX(NRF24L01_Device* Device)
  */
 static void prvResetToRx(NRF24L01_Device* Device)
 {
-	prvDisableRf(Device);
-	prvRxPowerup(Device);
-	prvEnableRf(Device);
+	disableRf(Device);
+	RxPowerup(Device);
+	enableRf(Device);
 	Device->InTxMode = False;
-
-	prvResetStatus(Device);
+		
+	ResetStatus(Device);
 }
 
 /**
@@ -692,18 +819,18 @@ static void prvResetToRx(NRF24L01_Device* Device)
  */
 static uint8_t prvGetData(NRF24L01_Device* Device, uint8_t* Storage)
 {	
-	prvSelectNrf24l01(Device);
+	selectNrf24l01(Device);
 	Device->SPIx_WriteRead(R_RX_PAYLOAD);
 	uint8_t dataCount = Device->SPIx_WriteRead(PAYLOAD_FILLER_DATA);
 	uint8_t i;
 	for (i = 0; i < dataCount + 1; i++)
 	{
 		Storage[i] = Device->SPIx_WriteRead(PAYLOAD_FILLER_DATA);
-	}
-	prvDeselectNrf24l01(Device);
+	}	
+	deselectNrf24l01(Device);
 	prvFlushRX(Device);
 	prvWriteRegisterOneByte(Device, STATUS, (1 << RX_DR));
-
+	
 	return dataCount;
 }
 
@@ -714,14 +841,15 @@ static uint8_t prvGetData(NRF24L01_Device* Device, uint8_t* Storage)
  * @retval	1: If data is ready
  */
 static uint8_t prvDataReady(NRF24L01_Device* Device)
+// Checks if data is available for reading
 {
 	static uint32_t timeoutTimer = 0;
 	if (Device->InTxMode)
 	{
-//		if (millis() - timeoutTimer >= TX_MODE_TIMEOUT) prvResetToRx(Device);
+		if (millis() - timeoutTimer >= TX_MODE_TIMEOUT) prvResetToRx(Device);
 		return 0;
 	}
-
+	
 	volatile uint8_t status = NRF24L01_GetStatus(Device);
 	return (status & (1 << RX_DR));
 }
@@ -736,8 +864,6 @@ static void prvPowerUpRx(NRF24L01_Device* Device)
 	Device->InTxMode = False;
 	prvWriteRegisterOneByte(Device, CONFIG, CONFIG_VALUE | ((1 << PWR_UP) | (1 << PRIM_RX)));
 	prvWriteRegisterOneByte(Device, STATUS, (1 << TX_DS) | (1 << MAX_RT));
-	/* TODO: What's up with the delay? */
-	//_delay_us(50);		// NOT GOOD!!!
 }
 
 /**
@@ -791,6 +917,6 @@ void NRF24L01_Interrupt(NRF24L01_Device* Device)
 				Device->ChecksumErrors++;
 			}
 		}
-		prvResetStatusRxDr(Device);
+		ResetStatusRxDr(Device);
 	}
 }

@@ -1,28 +1,28 @@
 /**
  ******************************************************************************
- * @file	rf_usart2_usb.h
+ * @file	usart2.h
  * @author	Hampus Sandberg
  * @version	0.1
- * @date	2013-05-10
+ * @date	2014-03-31
  * @brief	Manage USART
  ******************************************************************************
  */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef RF_USART2_USB_H_
-#define RF_USART2_USB_H_
+#ifndef USART2_H_
+#define USART2_H_
 
 /* Includes ------------------------------------------------------------------*/
+#include "FreeRTOS.h"
 #include "stm32f10x.h"
-#include "stm32f10x_conf.h"
 #include "outstream/outstream.h"
 
 /* Defines -------------------------------------------------------------------*/
 /* Variables -----------------------------------------------------------------*/
-OUT_Device RF_USART2_USB;
+OUT_Device USART2_Device;
 
 /* Typedefs ------------------------------------------------------------------*/
 /* Function prototypes -------------------------------------------------------*/
-void RF_USART2_USB_Init();
+void USART2_Init();
 
-#endif /* RF_USART2_USB_H_ */
+#endif /* USART2_H_ */

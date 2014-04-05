@@ -20,6 +20,8 @@ TODO:
 #include "nrf24l01_register_map.h"
 #include "nrf24l01.h"
 
+#include "rf-base-station/rf_usart2_usb.h"
+
 /* Private defines -----------------------------------------------------------*/
 //#if !defined(IRQ_PIN) && !defined(IRQ_DDR) && !defined(IRQ_PORT) && !defined(INTERRUPT_VECTOR) && !defined(IRQ_INTERRUPT)
 //#error "Please define IRQ_PIN, IRQ_DDR, IRQ_PORT, INTERRUPT_VECTOR, IRQ_INTERRUPT in project properties"
@@ -61,7 +63,7 @@ static void selectNrf24l01(NRF24L01_Device* Device) { GPIO_ResetBits(Device->CSN
 static void deselectNrf24l01(NRF24L01_Device* Device) { GPIO_SetBits(Device->CSN_GPIO, Device->CSN_Pin); }
 
 static void writeRegisterOneByte(NRF24L01_Device* Device, uint8_t Register, uint8_t Data);
-static void readRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* Storage, uint8_t ByteCount);
+static void prvReadRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* Storage, uint8_t ByteCount);
 static void writeRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t * Data, uint8_t ByteCount);
 
 static void flushTX(NRF24L01_Device* Device);
@@ -369,7 +371,7 @@ uint8_t NRF24L01_GetStatus(NRF24L01_Device* Device)
 uint8_t NRF24L01_GetFIFOStatus(NRF24L01_Device* Device)
 {
 	uint8_t FIFOStatus = 0;
-	readRegister(Device, FIFO_STATUS, &FIFOStatus, 1);
+	prvReadRegister(Device, FIFO_STATUS, &FIFOStatus, 1);
 	return FIFOStatus;
 }
 
@@ -397,7 +399,7 @@ void NRF24L01_EnablePipes(NRF24L01_Device* Device, uint8_t Pipes)
 	if (Pipes <= 0x3F)
 	{
 		uint8_t pipeValue;
-		readRegister(Device, EN_RXADDR, &pipeValue, 1);
+		prvReadRegister(Device, EN_RXADDR, &pipeValue, 1);
 		
 		pipeValue |= (Pipes);
 		writeRegisterOneByte(Device, EN_RXADDR, pipeValue);
@@ -415,7 +417,7 @@ void NRF24L01_DisablePipes(NRF24L01_Device* Device, uint8_t Pipes)
 	if (Pipes <= 0x3F)
 	{
 		uint8_t pipeValue;
-		readRegister(Device, EN_RXADDR, &pipeValue, 1);
+		prvReadRegister(Device, EN_RXADDR, &pipeValue, 1);
 		pipeValue &= ~(Pipes);
 		
 		writeRegisterOneByte(Device, EN_RXADDR, pipeValue);
@@ -507,81 +509,185 @@ uint16_t NRF24L01_GetChecksumErrors(NRF24L01_Device* Device)
  * @param	None
  * @retval	None
  */
-/*
 void NRF24L01_WriteDebugToUart(NRF24L01_Device* Device)
 {
-	UART_WriteString("------------\r");
-	uint8_t status = NRF24L01_GetStatus(Device);
-	UART_WriteString("Status: ");
-	UART_WriteHexByte(status, 1);
-	UART_WriteString("\r");
+	OUT_WriteString(&RF_USART2_USB, "------------\r");
+	OUT_WriteString(&RF_USART2_USB, "Name: ");
+	OUT_WriteString(&RF_USART2_USB, Device->NRF24L01_DeviceName);
+	OUT_WriteString(&RF_USART2_USB, "\r");
 	
+	/* ============================ */
 	uint8_t pipe = NRF24L01_GetPipeNumber(Device);
-	UART_WriteString("Pipe: ");
-	UART_WriteUintAsString(pipe);
-	UART_WriteString("\r");
-	
+	OUT_WriteString(&RF_USART2_USB, "Pipe: ");
+	OUT_WriteNumber(&RF_USART2_USB, pipe, 0);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+
+	/* ============================ */
+	uint8_t config;
+	prvReadRegister(Device, CONFIG, &config, 1);
+	OUT_WriteString(&RF_USART2_USB, "CONFIG: ");
+	OUT_WriteHexByte(&RF_USART2_USB, config, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
+	uint8_t en_aa;
+	prvReadRegister(Device, EN_AA, &en_aa, 1);
+	OUT_WriteString(&RF_USART2_USB, "EN_AA: ");
+	OUT_WriteHexByte(&RF_USART2_USB, en_aa, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
 	uint8_t en_rxaddr;
-	readRegister(Device, EN_RXADDR, &en_rxaddr, 1);
-	UART_WriteString("EN_RXADDR: ");
-	UART_WriteHexByte(en_rxaddr, 1);
-	UART_WriteString("\r");
+	prvReadRegister(Device, EN_RXADDR, &en_rxaddr, 1);
+	OUT_WriteString(&RF_USART2_USB, "EN_RXADDR: ");
+	OUT_WriteHexByte(&RF_USART2_USB, en_rxaddr, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
 
-	uint8_t addrTx[5];
-	readRegister(Device, TX_ADDR, addrTx, 5);
-	UART_WriteString("TX_ADDR: ");
-	UART_WriteHexByte(addrTx[0], 1);
-	UART_WriteHexByte(addrTx[1], 0);
-	UART_WriteHexByte(addrTx[2], 0);
-	UART_WriteHexByte(addrTx[3], 0);
-	UART_WriteHexByte(addrTx[4], 0);
-	UART_WriteString("\r");
+	/* ============================ */
+	uint8_t setupAw;
+	prvReadRegister(Device, SETUP_AW, &setupAw, 1);
+	OUT_WriteString(&RF_USART2_USB, "SETUP_AW: ");
+	OUT_WriteHexByte(&RF_USART2_USB, setupAw, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
 
+	/* ============================ */
+	uint8_t setupRetr;
+	prvReadRegister(Device, SETUP_RETR, &setupRetr, 1);
+	OUT_WriteString(&RF_USART2_USB, "SETUP_RETR: ");
+	OUT_WriteHexByte(&RF_USART2_USB, setupRetr, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
+	uint8_t rfChannel;
+	prvReadRegister(Device, RF_CH, &rfChannel, 1);
+	OUT_WriteString(&RF_USART2_USB, "RF_CH: ");
+	OUT_WriteHexByte(&RF_USART2_USB, rfChannel, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
+	uint8_t rfSetup;
+	prvReadRegister(Device, RF_SETUP, &rfSetup, 1);
+	OUT_WriteString(&RF_USART2_USB, "RF_SETUP: ");
+	OUT_WriteHexByte(&RF_USART2_USB, rfSetup, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
+	uint8_t status = NRF24L01_GetStatus(Device);
+	OUT_WriteString(&RF_USART2_USB, "STATUS: ");
+	OUT_WriteHexByte(&RF_USART2_USB, status, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
+	uint8_t observeTx;
+	prvReadRegister(Device, OBSERVE_TX, &observeTx, 1);
+	OUT_WriteString(&RF_USART2_USB, "OBSERVE_TX: ");
+	OUT_WriteHexByte(&RF_USART2_USB, observeTx, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
+	uint8_t rpd;
+	prvReadRegister(Device, RPD, &rpd, 1);
+	OUT_WriteString(&RF_USART2_USB, "RPD: ");
+	OUT_WriteHexByte(&RF_USART2_USB, rpd, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
 	uint8_t addr0[5];
-	readRegister(Device, RX_ADDR_P0, addr0, 5);
-	UART_WriteString("RX_ADDR_P0: ");
-	UART_WriteHexByte(addr0[0], 1);
-	UART_WriteHexByte(addr0[1], 0);
-	UART_WriteHexByte(addr0[2], 0);
-	UART_WriteHexByte(addr0[3], 0);
-	UART_WriteHexByte(addr0[4], 0);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P0, addr0, 5);
+	OUT_WriteString(&RF_USART2_USB, "RX_ADDR_P0-5: ");
+	OUT_WriteHexByte(&RF_USART2_USB, addr0[0], 1);
+	OUT_WriteHexByte(&RF_USART2_USB, addr0[1], 0);
+	OUT_WriteHexByte(&RF_USART2_USB, addr0[2], 0);
+	OUT_WriteHexByte(&RF_USART2_USB, addr0[3], 0);
+	OUT_WriteHexByte(&RF_USART2_USB, addr0[4], 0);
 
 	uint8_t addr1[5];
-	readRegister(Device, RX_ADDR_P1, addr1, 5);
-	UART_WriteString("RX_ADDR_P1: ");
-	UART_WriteHexByte(addr1[0], 1);
-	UART_WriteHexByte(addr1[1], 0);
-	UART_WriteHexByte(addr1[2], 0);
-	UART_WriteHexByte(addr1[3], 0);
-	UART_WriteHexByte(addr1[4], 0);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P1, addr1, 5);
+	OUT_WriteString(&RF_USART2_USB, ", ");
+	OUT_WriteHexByte(&RF_USART2_USB, addr1[0], 1);
+	OUT_WriteHexByte(&RF_USART2_USB, addr1[1], 0);
+	OUT_WriteHexByte(&RF_USART2_USB, addr1[2], 0);
+	OUT_WriteHexByte(&RF_USART2_USB, addr1[3], 0);
+	OUT_WriteHexByte(&RF_USART2_USB, addr1[4], 0);
 
 	uint8_t addr2;
-	readRegister(Device, RX_ADDR_P2, &addr2, 1);
-	UART_WriteString("RX_ADDR_P2: ");
-	UART_WriteHexByte(addr2, 1);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P2, &addr2, 1);
+	OUT_WriteString(&RF_USART2_USB, ", ");
+	OUT_WriteHexByte(&RF_USART2_USB, addr2, 1);
 
 	uint8_t addr3;
-	readRegister(Device, RX_ADDR_P3, &addr3, 1);
-	UART_WriteString("RX_ADDR_P3: ");
-	UART_WriteHexByte(addr3, 1);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P3, &addr3, 1);
+	OUT_WriteString(&RF_USART2_USB, ", ");
+	OUT_WriteHexByte(&RF_USART2_USB, addr3, 1);
 
 	uint8_t addr4;
-	readRegister(Device, RX_ADDR_P4, &addr4, 1);
-	UART_WriteString("RX_ADDR_P4: ");
-	UART_WriteHexByte(addr4, 1);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P4, &addr4, 1);
+	OUT_WriteString(&RF_USART2_USB, ", ");
+	OUT_WriteHexByte(&RF_USART2_USB, addr4, 1);
 
 	uint8_t addr5;
-	readRegister(Device, RX_ADDR_P5, &addr5, 1);
-	UART_WriteString("RX_ADDR_P5: ");
-	UART_WriteHexByte(addr5, 1);
-	UART_WriteString("\r");
+	prvReadRegister(Device, RX_ADDR_P5, &addr5, 1);
+	OUT_WriteString(&RF_USART2_USB, ", ");
+	OUT_WriteHexByte(&RF_USART2_USB, addr5, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
+	uint8_t addrTx[5];
+	prvReadRegister(Device, TX_ADDR, addrTx, 5);
+	OUT_WriteString(&RF_USART2_USB, "TX_ADDR: ");
+	OUT_WriteHexByte(&RF_USART2_USB, addrTx[0], 1);
+	OUT_WriteHexByte(&RF_USART2_USB, addrTx[1], 0);
+	OUT_WriteHexByte(&RF_USART2_USB, addrTx[2], 0);
+	OUT_WriteHexByte(&RF_USART2_USB, addrTx[3], 0);
+	OUT_WriteHexByte(&RF_USART2_USB, addrTx[4], 0);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
+	uint8_t payloads[6];
+	prvReadRegister(Device, RX_PW_P0, &payloads[0], 1);
+	OUT_WriteString(&RF_USART2_USB, "RX_PW_P0-5: ");
+	OUT_WriteHexByte(&RF_USART2_USB, payloads[0], 1);
+
+	prvReadRegister(Device, RX_PW_P1, &payloads[1], 1);
+	OUT_WriteString(&RF_USART2_USB, ", ");
+	OUT_WriteHexByte(&RF_USART2_USB, payloads[1], 1);
+
+	prvReadRegister(Device, RX_PW_P2, &payloads[2], 1);
+	OUT_WriteString(&RF_USART2_USB, ", ");
+	OUT_WriteHexByte(&RF_USART2_USB, payloads[2], 1);
+
+	prvReadRegister(Device, RX_PW_P3, &payloads[3], 1);
+	OUT_WriteString(&RF_USART2_USB, ", ");
+	OUT_WriteHexByte(&RF_USART2_USB, payloads[3], 1);
+
+	prvReadRegister(Device, RX_PW_P4, &payloads[4], 1);
+	OUT_WriteString(&RF_USART2_USB, ", ");
+	OUT_WriteHexByte(&RF_USART2_USB, payloads[4], 1);
+
+	prvReadRegister(Device, RX_PW_P5, &payloads[5], 1);
+	OUT_WriteString(&RF_USART2_USB, ", ");
+	OUT_WriteHexByte(&RF_USART2_USB, payloads[5], 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
+	uint8_t fifoStatus;
+	prvReadRegister(Device, FIFO_STATUS, &fifoStatus, 1);
+	OUT_WriteString(&RF_USART2_USB, "FIFO_STATUS: ");
+	OUT_WriteHexByte(&RF_USART2_USB, fifoStatus, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+	/* ============================ */
+	uint8_t dynpd;
+	prvReadRegister(Device, DYNPD, &dynpd, 1);
+	OUT_WriteString(&RF_USART2_USB, "DYNPD: ");
+	OUT_WriteHexByte(&RF_USART2_USB, dynpd, 1);
+	OUT_WriteString(&RF_USART2_USB, "\r");
+
+
+	OUT_WriteString(&RF_USART2_USB, "------------\r");
 }
-*/
+
 
 /* Private Functions ---------------------------------------------------------*/
 /**
@@ -611,7 +717,7 @@ static void writeRegisterOneByte(NRF24L01_Device* Device, uint8_t Register, uint
  * @retval	The status register
  * @note	LSByte is read first
  */
-static void readRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* Storage, uint8_t ByteCount)
+static void prvReadRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* Storage, uint8_t ByteCount)
 {
 	if (IS_VALID_REGISTER(Register))
 	{

@@ -18,12 +18,12 @@
 
 /* Defines -------------------------------------------------------------------*/
 #ifndef CIRCULARBUFFER_SIZE
-#warning "CIRCULARBUFFER_SIZE is not defined. Will now define it to 64"
+//#warning "CIRCULARBUFFER_SIZE is not defined. Will now define it to 64"
 #define CIRCULARBUFFER_SIZE	64
 #endif
 
 #ifndef CIRCULARBUFFER_DATATYPE
-#warning "CIRCULARBUFFER_DATATYPE is not defined. Will now define it to uint32_t"
+//#warning "CIRCULARBUFFER_DATATYPE is not defined. Will now define it to uint8_t"
 #define CIRCULARBUFFER_DATATYPE	uint8_t
 #endif
 

@@ -1,28 +1,25 @@
 /**
  ******************************************************************************
- * @file	rf_usart2_usb.h
+ * @file	spi2.h
  * @author	Hampus Sandberg
  * @version	0.1
- * @date	2013-05-10
- * @brief	Manage USART
+ * @date	2014-04-05
+ * @brief	Manage SPI2
  ******************************************************************************
  */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef RF_USART2_USB_H_
-#define RF_USART2_USB_H_
+#ifndef SPI2_H_
+#define SPI2_H_
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f10x.h"
-#include "stm32f10x_conf.h"
-#include "outstream/outstream.h"
 
 /* Defines -------------------------------------------------------------------*/
-/* Variables -----------------------------------------------------------------*/
-OUT_Device RF_USART2_USB;
-
 /* Typedefs ------------------------------------------------------------------*/
 /* Function prototypes -------------------------------------------------------*/
-void RF_USART2_USB_Init();
+void SPI2_Init();
+uint8_t SPI2_WriteRead(uint8_t Data);
+void SPI2_Write(uint8_t Data);
 
-#endif /* RF_USART2_USB_H_ */
+#endif /* SPI2_H_ */

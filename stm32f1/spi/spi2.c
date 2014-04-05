@@ -10,8 +10,6 @@
  ******************************************************************************
  */
 
-/* TODO: Fix overhead issues from the standard library functions */
-
 /* Includes ------------------------------------------------------------------*/
 #include "spi2.h"
 
@@ -24,11 +22,6 @@
 #define MOSI_Pin	(GPIO_Pin_15)
 
 /* Private variables ---------------------------------------------------------*/
-SemaphoreHandle_t xTxSemaphore_2 = NULL;
-SemaphoreHandle_t xRxSemaphore_2 = NULL;
-
-uint8_t receivedByte_2 = 0;
-
 /* Private functions ---------------------------------------------------------*/
 /* Functions -----------------------------------------------------------------*/
 /**
@@ -38,23 +31,9 @@ uint8_t receivedByte_2 = 0;
  */
 void SPI2_Init()
 {
-	/* Create the binary semaphores */
-	xTxSemaphore_2 = xSemaphoreCreateBinary();
-	xRxSemaphore_2 = xSemaphoreCreateBinary();
-	/* TODO: Check if this is needed because the semaphore has to be given before it can be taken */
-//	xSemaphoreGive(xTxSemaphore_2);
-
 	/* Enable GPIOx clock */
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
-
-	/* NVIC Configuration */
-	NVIC_InitTypeDef NVIC_InitStructure;
-	NVIC_InitStructure.NVIC_IRQChannel 						= SPIx_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority 	= configLIBRARY_LOWEST_INTERRUPT_PRIORITY - 1;
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority 			= 0;
-	NVIC_InitStructure.NVIC_IRQChannelCmd 					= ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
 
 	/* Configure SPIx-SCK, SPIx-MOSI alternate function push-pull */
 	GPIO_InitTypeDef GPIO_InitStructure;
@@ -85,12 +64,6 @@ void SPI2_Init()
 	SPI_InitStructure.SPI_CRCPolynomial 	= 7;
 	SPI_Init(SPIx, &SPI_InitStructure);
 
-	/*
-	 * Enable SPI_I2S_IT_RXNE interrupt
-	 * SPI_I2S_IT_TXE interrupt will only be enabled when a write should happen
-	 * */
-	SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_RXNE, ENABLE);
-
 	/* Enable SPIx */
 	SPI_Cmd(SPIx, ENABLE);
 }
@@ -103,23 +76,16 @@ void SPI2_Init()
 uint8_t SPI2_WriteRead(uint8_t Data)
 {
 	/* Loop while DR register is not empty */
-	//while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_TXE) == RESET);
-
-	/* Enable SPI_MASTER TXE interrupt */
-	SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, ENABLE);
-	/* Try to take the TX Semaphore */
-	xSemaphoreTake(xTxSemaphore_2, portMAX_DELAY);
+	while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_TXE) == RESET);
 
 	/* Send byte through the SPIx peripheral */
 	SPI_I2S_SendData(SPIx, (uint16_t)Data);
 
 	/* Wait to receive a byte */
-	//while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_RXNE) == RESET);
-	/* Try to take the RX Semaphore */
-	xSemaphoreTake(xRxSemaphore_2, portMAX_DELAY);
+	while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_RXNE) == RESET);
 
 	/* Return the byte read from the SPI bus */
-	return receivedByte_2;
+	return SPI_I2S_ReceiveData(SPIx);
 }
 
 /**
@@ -130,12 +96,7 @@ uint8_t SPI2_WriteRead(uint8_t Data)
 void SPI2_Write(uint8_t Data)
 {
 	/* Loop while DR register is not empty */
-	//while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_TXE) == RESET);
-
-	/* Enable SPI_MASTER TXE interrupt */
-	SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, ENABLE);
-	/* Try to take the TX Semaphore */
-	xSemaphoreTake(xTxSemaphore_2, portMAX_DELAY);
+	while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_TXE) == RESET);
 
 	/* Send byte through the SPIx peripheral */
 	SPI_I2S_SendData(SPIx, (uint16_t)Data);
@@ -143,37 +104,3 @@ void SPI2_Write(uint8_t Data)
 
 
 /* Interrupt Handlers --------------------------------------------------------*/
-#if SPI_NO == (2)
-void SPI2_IRQHandler(void)
-#elif SPI_NO == (1)
-void SPI1_IRQHandler(void)
-#endif
-{
-	static BaseType_t xHigherPriorityTaskWoken;
-
-	/* Transmit buffer empty interrupt */
-	if (SPI_I2S_GetITStatus(SPIx, SPI_I2S_IT_TXE) != RESET)
-	{
-		/* Release the semaphore */
-		xSemaphoreGiveFromISR(xTxSemaphore_2, &xHigherPriorityTaskWoken);
-		/* Disable SPI_MASTER TXE interrupt */
-		SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, DISABLE);
-	}
-	/* Receive buffer not empty interrupt */
-	else if (SPI_I2S_GetITStatus(SPIx, SPI_I2S_IT_RXNE) != RESET)
-	{
-		/* Release the semaphore */
-		xSemaphoreGiveFromISR(xRxSemaphore_2, &xHigherPriorityTaskWoken);
-		/* Read the byte received in order to clear the interrupt flag */
-		receivedByte_2 = SPI_I2S_ReceiveData(SPIx);
-	}
-
-	if (xHigherPriorityTaskWoken != pdFALSE)
-	{
-		/*
-		 * If xHigherPriorityTaskWoken was set to true you we should yield.
-		 * The actual macro used here is port specific.
-		 */
-		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-	}
-}
