@@ -1,29 +1,25 @@
 /**
  ******************************************************************************
- * @file	millis.h
+ * @file	spi1.h
  * @author	Hampus Sandberg
  * @version	0.1
- * @date	2013-05-09
- * @brief	Manage a millis counter
+ * @date	2014-04-11
+ * @brief	Manage SPI1
  ******************************************************************************
  */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef MILLIS_H_
-#define MILLIS_H_
+#ifndef SPI1_H_
+#define SPI1_H_
 
 /* Includes ------------------------------------------------------------------*/
-#if defined(STM32F40_41xxx)
 #include "stm32f4xx.h"
-#elif defined(STM32F10X_MD) || defined(STM32F10X_MD_VL)
-#include "stm32f10x.h"
-#endif
 
 /* Defines -------------------------------------------------------------------*/
 /* Typedefs ------------------------------------------------------------------*/
 /* Function prototypes -------------------------------------------------------*/
-void MILLIS_Init(void);
-uint32_t millis(void);
-void millisDelay(uint32_t);
+void SPI1_Init();
+uint8_t SPI1_WriteRead(uint8_t Data);
+void SPI1_Write(uint8_t Data);
 
-#endif /* MILLIS_H_ */
+#endif /* SPI1_H_ */

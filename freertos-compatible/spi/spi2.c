@@ -80,7 +80,7 @@ void SPI2_Init()
 	SPI_InitStructure.SPI_CPOL 				= SPI_CPOL_Low;
 	SPI_InitStructure.SPI_CPHA 				= SPI_CPHA_1Edge;
 	SPI_InitStructure.SPI_NSS 				= SPI_NSS_Soft;
-	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_4;
+	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_16;
 	SPI_InitStructure.SPI_FirstBit 			= SPI_FirstBit_MSB;
 	SPI_InitStructure.SPI_CRCPolynomial 	= 7;
 	SPI_Init(SPIx, &SPI_InitStructure);
@@ -102,19 +102,14 @@ void SPI2_Init()
  */
 uint8_t SPI2_WriteRead(uint8_t Data)
 {
-	/* Loop while DR register is not empty */
-	//while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_TXE) == RESET);
-
 	/* Enable SPI_MASTER TXE interrupt */
 	SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, ENABLE);
 	/* Try to take the TX Semaphore */
 	xSemaphoreTake(xTxSemaphore_2, portMAX_DELAY);
 
 	/* Send byte through the SPIx peripheral */
-	SPI_I2S_SendData(SPIx, (uint16_t)Data);
+	SPIx->DR = Data;
 
-	/* Wait to receive a byte */
-	//while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_RXNE) == RESET);
 	/* Try to take the RX Semaphore */
 	xSemaphoreTake(xRxSemaphore_2, portMAX_DELAY);
 
@@ -129,16 +124,13 @@ uint8_t SPI2_WriteRead(uint8_t Data)
  */
 void SPI2_Write(uint8_t Data)
 {
-	/* Loop while DR register is not empty */
-	//while (SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG_TXE) == RESET);
-
 	/* Enable SPI_MASTER TXE interrupt */
 	SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, ENABLE);
 	/* Try to take the TX Semaphore */
 	xSemaphoreTake(xTxSemaphore_2, portMAX_DELAY);
 
 	/* Send byte through the SPIx peripheral */
-	SPI_I2S_SendData(SPIx, (uint16_t)Data);
+	SPIx->DR = Data;
 }
 
 

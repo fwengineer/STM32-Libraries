@@ -22,8 +22,8 @@
 #define MOSI_Pin	(GPIO_Pin_7)
 
 /* Private variables ---------------------------------------------------------*/
-SemaphoreHandle_t xTxSemaphore_1 = NULL;
-SemaphoreHandle_t xRxSemaphore_1 = NULL;
+SemaphoreHandle_t xTxSemaphore = NULL;
+SemaphoreHandle_t xRxSemaphore = NULL;
 
 uint8_t receivedByte_1 = 0;
 
@@ -37,8 +37,8 @@ uint8_t receivedByte_1 = 0;
 void SPI1_Init()
 {
 	/* Create the binary semaphores */
-	xTxSemaphore_1 = xSemaphoreCreateBinary();
-	xRxSemaphore_1 = xSemaphoreCreateBinary();
+	xTxSemaphore = xSemaphoreCreateBinary();
+	xRxSemaphore = xSemaphoreCreateBinary();
 	/* TODO: Check if this is needed because the semaphore has to be given before it can be taken */
 //	xSemaphoreGive(xTxSemaphore_1);
 
@@ -79,7 +79,7 @@ void SPI1_Init()
 	SPI_InitStructure.SPI_CPOL 				= SPI_CPOL_Low;
 	SPI_InitStructure.SPI_CPHA 				= SPI_CPHA_1Edge;
 	SPI_InitStructure.SPI_NSS 				= SPI_NSS_Soft;
-	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_4;
+	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_16;
 	SPI_InitStructure.SPI_FirstBit 			= SPI_FirstBit_MSB;
 	SPI_InitStructure.SPI_CRCPolynomial 	= 7;
 	SPI_Init(SPIx, &SPI_InitStructure);
@@ -104,13 +104,13 @@ uint8_t SPI1_WriteRead(uint8_t Data)
 	/* Enable SPI_MASTER TXE interrupt */
 	SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, ENABLE);
 	/* Try to take the TX Semaphore */
-	xSemaphoreTake(xTxSemaphore_1, portMAX_DELAY);
+	xSemaphoreTake(xTxSemaphore, portMAX_DELAY);
 
 	/* Send byte through the SPIx peripheral */
-	SPI_I2S_SendData(SPIx, (uint16_t)Data);
+	SPIx->DR = Data;
 
 	/* Try to take the RX Semaphore */
-	xSemaphoreTake(xRxSemaphore_1, portMAX_DELAY);
+	xSemaphoreTake(xRxSemaphore, portMAX_DELAY);
 
 	/* Return the byte read from the SPI bus */
 	return receivedByte_1;
@@ -123,14 +123,13 @@ uint8_t SPI1_WriteRead(uint8_t Data)
  */
 void SPI1_Write(uint8_t Data)
 {
-
 	/* Enable SPI_MASTER TXE interrupt */
 	SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, ENABLE);
 	/* Try to take the TX Semaphore */
-	xSemaphoreTake(xTxSemaphore_1, portMAX_DELAY);
+	xSemaphoreTake(xTxSemaphore, portMAX_DELAY);
 
 	/* Send byte through the SPIx peripheral */
-	SPI_I2S_SendData(SPIx, (uint16_t)Data);
+	SPIx->DR = Data;
 }
 
 
@@ -147,7 +146,7 @@ void SPI1_IRQHandler(void)
 	if (SPI_I2S_GetITStatus(SPIx, SPI_I2S_IT_TXE) != RESET)
 	{
 		/* Release the semaphore */
-		xSemaphoreGiveFromISR(xTxSemaphore_1, &xHigherPriorityTaskWoken);
+		xSemaphoreGiveFromISR(xTxSemaphore, &xHigherPriorityTaskWoken);
 		/* Disable SPI_MASTER TXE interrupt */
 		SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, DISABLE);
 	}
@@ -155,7 +154,7 @@ void SPI1_IRQHandler(void)
 	else if (SPI_I2S_GetITStatus(SPIx, SPI_I2S_IT_RXNE) != RESET)
 	{
 		/* Release the semaphore */
-		xSemaphoreGiveFromISR(xRxSemaphore_1, &xHigherPriorityTaskWoken);
+		xSemaphoreGiveFromISR(xRxSemaphore, &xHigherPriorityTaskWoken);
 		/* Read the byte received in order to clear the interrupt flag */
 		receivedByte_1 = SPI_I2S_ReceiveData(SPIx);
 	}
