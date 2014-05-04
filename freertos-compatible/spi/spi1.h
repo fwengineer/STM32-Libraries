@@ -21,7 +21,7 @@
 /* Typedefs ------------------------------------------------------------------*/
 /* Function prototypes -------------------------------------------------------*/
 void SPI1_Init();
+void SPI1_InitWithStructure(SPI_InitTypeDef* SPI_InitStructure);
 uint8_t SPI1_WriteRead(uint8_t Data);
-void SPI1_Write(uint8_t Data);
 
 #endif /* SPI1_H_ */

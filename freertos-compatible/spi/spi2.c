@@ -38,11 +38,38 @@ uint8_t receivedByte_2 = 0;
  */
 void SPI2_Init()
 {
-	/* Create the binary semaphores */
+	/* Initialize SPIx */
+	SPI_InitTypeDef SPI_InitStructure;
+	SPI_InitStructure.SPI_Direction 		= SPI_Direction_2Lines_FullDuplex;
+	SPI_InitStructure.SPI_Mode 				= SPI_Mode_Master;
+	SPI_InitStructure.SPI_DataSize 			= SPI_DataSize_8b;
+	SPI_InitStructure.SPI_CPOL 				= SPI_CPOL_Low;
+	SPI_InitStructure.SPI_CPHA 				= SPI_CPHA_1Edge;
+	SPI_InitStructure.SPI_NSS 				= SPI_NSS_Soft;
+	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_16;
+	SPI_InitStructure.SPI_FirstBit 			= SPI_FirstBit_MSB;
+	SPI_InitStructure.SPI_CRCPolynomial 	= 7;
+
+	SPI2_InitWithStructure(&SPI_InitStructure);
+}
+
+/**
+ * @brief	Initializes the SPI
+ * @param	SPI_InitStructure: Struct with the parameters for the SPI peripheral
+ * @retval	None
+ */
+void SPI2_InitWithStructure(SPI_InitTypeDef* SPI_InitStructure)
+{
+	/*
+	 * Create the binary semaphores:
+	 * The semaphore is created in the 'empty' state, meaning
+	 * the semaphore must first be given before it can be taken (obtained)
+	 * using the xSemaphoreTake() function.
+	 */
 	xTxSemaphore_2 = xSemaphoreCreateBinary();
 	xRxSemaphore_2 = xSemaphoreCreateBinary();
 	/* TODO: Check if this is needed because the semaphore has to be given before it can be taken */
-//	xSemaphoreGive(xTxSemaphore_2);
+//	xSemaphoreGive(xTxSemaphore_1);
 
 	/* Enable GPIOx clock */
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
@@ -73,17 +100,7 @@ void SPI2_Init()
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
 
 	/* Initialize SPIx */
-	SPI_InitTypeDef SPI_InitStructure;
-	SPI_InitStructure.SPI_Direction 		= SPI_Direction_2Lines_FullDuplex;
-	SPI_InitStructure.SPI_Mode 				= SPI_Mode_Master;
-	SPI_InitStructure.SPI_DataSize 			= SPI_DataSize_8b;
-	SPI_InitStructure.SPI_CPOL 				= SPI_CPOL_Low;
-	SPI_InitStructure.SPI_CPHA 				= SPI_CPHA_1Edge;
-	SPI_InitStructure.SPI_NSS 				= SPI_NSS_Soft;
-	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_16;
-	SPI_InitStructure.SPI_FirstBit 			= SPI_FirstBit_MSB;
-	SPI_InitStructure.SPI_CRCPolynomial 	= 7;
-	SPI_Init(SPIx, &SPI_InitStructure);
+	SPI_Init(SPIx, SPI_InitStructure);
 
 	/*
 	 * Enable SPI_I2S_IT_RXNE interrupt
@@ -116,23 +133,6 @@ uint8_t SPI2_WriteRead(uint8_t Data)
 	/* Return the byte read from the SPI bus */
 	return receivedByte_2;
 }
-
-/**
- * @brief	Writes data to the SPI
- * @param	Data: data to be written to the SPI
- * @retval	None
- */
-void SPI2_Write(uint8_t Data)
-{
-	/* Enable SPI_MASTER TXE interrupt */
-	SPI_I2S_ITConfig(SPIx, SPI_I2S_IT_TXE, ENABLE);
-	/* Try to take the TX Semaphore */
-	xSemaphoreTake(xTxSemaphore_2, portMAX_DELAY);
-
-	/* Send byte through the SPIx peripheral */
-	SPIx->DR = Data;
-}
-
 
 /* Interrupt Handlers --------------------------------------------------------*/
 #if SPI_NO == (2)

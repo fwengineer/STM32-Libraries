@@ -32,9 +32,15 @@ void RF_SPI2_Init()
 
 	/* Configure SPIx-SCK, SPIx-MOSI, SPIx-MISO alternate function push-pull */
 	GPIO_InitTypeDef GPIO_InitStructure;
-	GPIO_InitStructure.GPIO_Pin   = SCK_Pin | MOSI_Pin | MISO_Pin;
+	GPIO_InitStructure.GPIO_Pin   = SCK_Pin | MOSI_Pin;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF_PP;
+	GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+	/* Configure SPIx-MISO */
+	GPIO_InitStructure.GPIO_Pin   = MISO_Pin;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IN_FLOATING;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	/* Enable SPIx Peripheral clock */
@@ -48,7 +54,7 @@ void RF_SPI2_Init()
 	SPI_InitStructure.SPI_CPOL 				= SPI_CPOL_Low;
 	SPI_InitStructure.SPI_CPHA 				= SPI_CPHA_1Edge;
 	SPI_InitStructure.SPI_NSS 				= SPI_NSS_Soft;
-	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_4;
+	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_64;
 	SPI_InitStructure.SPI_FirstBit 			= SPI_FirstBit_MSB;
 	SPI_InitStructure.SPI_CRCPolynomial 	= 7;
 	SPI_Init(SPIx, &SPI_InitStructure);

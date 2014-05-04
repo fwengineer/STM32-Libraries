@@ -3,7 +3,7 @@
  * @file	nrf24l01_register_map.h
  * @author	Hampus Sandberg
  * @version	0.1
- * @date	2013-04-27
+ * @date	2014-05-04
  * @brief	
  ******************************************************************************
  */
@@ -17,18 +17,6 @@
  *
  *	A node below should never transmit to pipe 0 on a node above
  */
-
-#define COORDINATOR_0_ADDRESS	0xEBDFAC8070
-
-// Height 0 -> 1 Device
-#define DEVICE_0_1_ADDRESS	0xEBDFAC8071
-
-// Height 1 -> 5 Devices
-#define DEVICE_1_1_ADDRESS	0xEBDFAC8171
-#define DEVICE_1_2_ADDRESS	0xEBDFAC8172
-#define DEVICE_1_3_ADDRESS	0xEBDFAC8173
-#define DEVICE_1_4_ADDRESS	0xEBDFAC8174
-#define DEVICE_1_5_ADDRESS	0xEBDFAC8175
 
 /* Register Map --------------------------------------------------------------*/
 #define CONFIG      0x00
