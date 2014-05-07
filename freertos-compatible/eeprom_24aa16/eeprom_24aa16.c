@@ -31,7 +31,6 @@ void EEPROM_Init(EEPROM_Device* Device)
 {
 	/* Initialize xNextWriteTime - this only needs to be done once. */
 	xNextWriteTime = xTaskGetTickCount();
-	Device->Initialized = True;
 }
 
 
@@ -45,7 +44,7 @@ void EEPROM_Init(EEPROM_Device* Device)
  */
 ErrorStatus EEPROM_WriteByteToAddress(EEPROM_Device* Device, uint8_t Byte, uint16_t Address)
 {
-	if (Device->Initialized && Address <= 0x7FF)
+	if (Address <= 0x7FF)
 	{
 		if (Byte != EEPROM_ReadByteFromAddress(Device, Address))
 		{
@@ -74,7 +73,7 @@ ErrorStatus EEPROM_WriteByteToAddress(EEPROM_Device* Device, uint8_t Byte, uint1
  */
 uint8_t EEPROM_ReadByteFromAddress(EEPROM_Device* Device, uint16_t Address)
 {
-	if (Device->Initialized && Address <= 0x7FF)
+	if (Address <= 0x7FF)
 	{
 		/* Wait until eepromMS_BETWEEN_WRITES has passed since the last write */
 		vTaskDelayUntil(&xNextWriteTime, eepromMS_BETWEEN_WRITES / portTICK_PERIOD_MS);
@@ -104,7 +103,7 @@ uint8_t EEPROM_ReadByteFromAddress(EEPROM_Device* Device, uint16_t Address)
  */
 ErrorStatus EEPROM_ReadBytesFromStartAddress(EEPROM_Device* Device, uint8_t *Storage, uint16_t NumByteToRead, uint16_t StartAddress)
 {
-	if (Device->Initialized && StartAddress <= 0x7FF)
+	if (StartAddress <= 0x7FF)
 	{
 		/* Wait until eepromMS_BETWEEN_WRITES has passed since the last write */
 		vTaskDelayUntil(&xNextWriteTime, eepromMS_BETWEEN_WRITES / portTICK_PERIOD_MS);

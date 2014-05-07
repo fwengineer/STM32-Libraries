@@ -14,7 +14,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f10x.h"
-#include "common.h"
 #include "i2c_config.h"
 
 /* Make sure the methods used by the EEPROM is defined */
@@ -27,7 +26,6 @@
 typedef struct
 {
 	uint8_t Address;			/* I2C Address for the EEPROM */
-	Boolean Initialized;		/* True if initialized, False otherwise */
 
 } EEPROM_Device;
 

@@ -14,7 +14,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f10x.h"
-#include "common.h"
 
 /* Defines -------------------------------------------------------------------*/
 #ifndef CIRCULARBUFFER_SIZE
@@ -45,8 +44,6 @@ typedef struct
 	CIRCULARBUFFER_DATATYPE data[CIRCULARBUFFER_SIZE];		/** The actual buffer */
 	CIRCULARBUFFER_COUNTTYPE count;							/** A counter for how much data there is
 																in the buffer */
-	Boolean Initialized;									/** Variable that is set once init has been
-																done on the buffer */
 } CircularBuffer_TypeDef;
 
 /* Function prototypes -------------------------------------------------------*/

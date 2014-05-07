@@ -28,7 +28,6 @@ void CIRC_BUFFER_Init(CircularBuffer_TypeDef* CircularBuffer)
 	CircularBuffer->in = CircularBuffer->data;
 	CircularBuffer->out = CircularBuffer->data;
 	CircularBuffer->count = 0;
-	CircularBuffer->Initialized = True;
 }
 
 /**
