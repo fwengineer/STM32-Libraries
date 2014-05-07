@@ -48,7 +48,11 @@ void NRF24L01_Init(NRF24L01_Device* Device)
 	 * using the xSemaphoreTake() function.
 	 */
 	Device->xTxSemaphore = xSemaphoreCreateBinary();
+	Device->xDataAvailableSemaphore = xSemaphoreCreateBinary();
 	xSemaphoreGive(Device->xTxSemaphore);
+	xSemaphoreGive(Device->xDataAvailableSemaphore);
+	/* Take the semaphore because no data is available yet */
+	xSemaphoreTake(Device->xDataAvailableSemaphore, portMAX_DELAY);
 
 
 	/* Initialize RX Buffers */
@@ -128,9 +132,10 @@ void NRF24L01_Init(NRF24L01_Device* Device)
 	SPI_InitStructure.SPI_NSS 				= SPI_NSS_Soft;
 	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_8;		/* 72 MHz/8 = 9 MHz, Datasheet page 53 says max 10 MHz (with Cload = 5 pF) */
 	SPI_InitStructure.SPI_FirstBit 			= SPI_FirstBit_MSB;				/* See datasheet page 50 */
-	Device->SPIx_InitWithStructure(&SPI_InitStructure);
+	SPI_InitWithStructure(Device->SPIDevice, &SPI_InitStructure);
 
-	Device->SPIx_WriteRead(0xAA);
+	/* Wait 100ms for Power-On reset, see page 20 in datasheet */
+	vTaskDelay(100 / portTICK_PERIOD_MS);
 
 	/* Set RF Channel */
 	NRF24L01_SetRFChannel(Device, Device->RfChannel);
@@ -184,16 +189,16 @@ void NRF24L01_WritePayload(NRF24L01_Device* Device, uint8_t* Data, uint8_t DataC
 
 	SELECT_DEVICE(Device);
 
-	Device->SPIx_WriteRead(W_TX_PAYLOAD);	/* We want to write the TX payload */
-	Device->SPIx_WriteRead(DataCount);		/* Write the data count */
+	SPI_WriteRead(Device->SPIDevice, W_TX_PAYLOAD);	/* We want to write the TX payload */
+	SPI_WriteRead(Device->SPIDevice, DataCount);		/* Write the data count */
 	uint32_t i;
 	for (i = 0; i < DataCount; i++)
 	{
-		Device->SPIx_WriteRead(Data[i]);	/* Write the data */
+		SPI_WriteRead(Device->SPIDevice, Data[i]);	/* Write the data */
 	}
 	for (i++; i <= MAX_DATA_COUNT; i++)
 	{
-		Device->SPIx_WriteRead(PAYLOAD_FILLER_DATA);	/* Fill the rest of the payload with filler data */
+		SPI_WriteRead(Device->SPIDevice, PAYLOAD_FILLER_DATA);	/* Fill the rest of the payload with filler data */
 	}
 
 	DESELECT_DEVICE(Device);
@@ -208,7 +213,7 @@ void NRF24L01_WritePayload(NRF24L01_Device* Device, uint8_t* Data, uint8_t DataC
 void NRF24L01_ReadRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* Buffer, uint8_t BufferSize)
 {
 	SELECT_DEVICE(Device);
-	uint8_t status = Device->SPIx_WriteRead(R_REGISTER | Register);
+	uint8_t status = SPI_WriteRead(Device->SPIDevice, R_REGISTER | Register);
 
 	/* R_REGISTER command only have 5 data bytes, datasheet page 51 */
 	if (BufferSize > 5)
@@ -217,7 +222,7 @@ void NRF24L01_ReadRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* B
 	/* LSByte first, datasheet page 50 */
 	for (int32_t i = BufferSize-1; i >= 0; i--)
 	{
-		Buffer[i] = Device->SPIx_WriteRead(NOP);
+		Buffer[i] = SPI_WriteRead(Device->SPIDevice, NOP);
 	}
 	DESELECT_DEVICE(Device);
 }
@@ -231,7 +236,7 @@ void NRF24L01_WriteRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* 
 {
 	DISABLE_DEVICE(Device);	 /* W_REGISTER is executable in power down or standby modes only */
 	SELECT_DEVICE(Device);
-	uint8_t status = Device->SPIx_WriteRead(W_REGISTER | Register);
+	uint8_t status = SPI_WriteRead(Device->SPIDevice, W_REGISTER | Register);
 
 	/* W_REGISTER command only have 5 data bytes, datasheet page 51 */
 	if (BufferSize > 5)
@@ -241,7 +246,7 @@ void NRF24L01_WriteRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* 
 	for (int32_t i = BufferSize-1; i >= 0; i--)
 	{
 		/* Have to do WriteRead for some reason, otherwise one byte will be lost */
-		status = Device->SPIx_WriteRead(Buffer[i]);
+		status = SPI_WriteRead(Device->SPIDevice, Buffer[i]);
 	}
 	DESELECT_DEVICE(Device);
 	ENABLE_DEVICE(Device);
@@ -328,7 +333,7 @@ void NRF24L01_EnablePipe(NRF24L01_Device* Device, uint8_t Pipe)
 void NRF24L01_FlushTxBuffer(NRF24L01_Device* Device)
 {
 	SELECT_DEVICE(Device);
-	Device->SPIx_WriteRead(FLUSH_TX);
+	SPI_WriteRead(Device->SPIDevice, FLUSH_TX);
 	DESELECT_DEVICE(Device);
 }
 
@@ -340,7 +345,7 @@ void NRF24L01_FlushTxBuffer(NRF24L01_Device* Device)
 void NRF24L01_FlushRxBuffer(NRF24L01_Device* Device)
 {
 	SELECT_DEVICE(Device);
-	Device->SPIx_WriteRead(FLUSH_RX);
+	SPI_WriteRead(Device->SPIDevice, FLUSH_RX);
 	DESELECT_DEVICE(Device);
 }
 
@@ -386,6 +391,8 @@ void NRF24L01_PowerUpInTxMode(NRF24L01_Device* Device)
 {
 	uint8_t data = CONFIG_BASE | (1 << PWR_UP) | (0 << PRIM_RX);
 	NRF24L01_WriteRegister(Device, CONFIG, &data, 1);
+
+	Device->InTxMode = pdTRUE;
 }
 
 /**
@@ -397,6 +404,8 @@ void NRF24L01_PowerUpInRxMode(NRF24L01_Device* Device)
 {
 	uint8_t data = CONFIG_BASE | (1 << PWR_UP) | (1 << PRIM_RX);
 	NRF24L01_WriteRegister(Device, CONFIG, &data, 1);
+
+	Device->InTxMode = pdFALSE;
 }
 
 /**
@@ -418,7 +427,7 @@ void NRF24L01_PowerDownMode(NRF24L01_Device* Device)
 uint8_t NRF24L01_GetStatus(NRF24L01_Device* Device)
 {
 	SELECT_DEVICE(Device);
-	uint8_t status = Device->SPIx_WriteRead(NOP);
+	uint8_t status = SPI_WriteRead(Device->SPIDevice, NOP);
 	DESELECT_DEVICE(Device);
 
 	return status;
@@ -433,16 +442,24 @@ uint8_t NRF24L01_GetStatus(NRF24L01_Device* Device)
 uint8_t NRF24L01_GetDataFromRxBuffer(NRF24L01_Device* Device, uint8_t* Buffer)
 {
 	SELECT_DEVICE(Device);
-	Device->SPIx_WriteRead(R_RX_PAYLOAD);
-	uint32_t dataCount = Device->SPIx_WriteRead(NOP);
+	SPI_WriteRead(Device->SPIDevice, R_RX_PAYLOAD);
+	uint8_t dataCount = SPI_WriteRead(Device->SPIDevice, NOP);
 
-	for (uint32_t i = 0; i < dataCount + 1; i++)
+	/*
+	 * Only get the maximum amount of data which can be stored in one payload (MAX_DATA_COUNT)
+	 * When dataCount was used as a limit we got a hardfault because there is no control if
+	 * dataCount is > MAX_DATA_COUNT and the data where Buffer exist might become corrupt
+	 */
+	for (uint32_t i = 0; i < MAX_DATA_COUNT; i++)
 	{
-		Buffer[i] = Device->SPIx_WriteRead(NOP);
+		Buffer[i] = SPI_WriteRead(Device->SPIDevice, NOP);
 	}
 	DESELECT_DEVICE(Device);
 
-//	NRF24L01_FlushRxBuffer(Device);	/* TODO: Is this needed??? */
+	/*
+	 * Flush just in case
+	 */
+	NRF24L01_FlushRxBuffer(Device);
 
 	return dataCount;
 }
@@ -485,7 +502,7 @@ void NRF24L01_GetDataFromPipe(NRF24L01_Device* Device, uint8_t Pipe, uint8_t* Bu
 }
 
 /* Debug Print ---------------------------------------------------------------*/
-#ifdef DEBUG
+#if 0
 /**
  * @brief	Write some debug info to the UART
  * @param	Device: The device to use
@@ -607,8 +624,6 @@ void NRF24L01_PrintDebugInfo(NRF24L01_Device* Device)
 /* Interrupt Service Routines ------------------------------------------------*/
 void NRF24L01_Interrupt(NRF24L01_Device* Device)
 {
-	static BaseType_t xHigherPriorityTaskWoken;
-
 	uint8_t status = NRF24L01_GetStatus(Device);
 	/* Data Sent TX FIFO interrupt, asserted when packet transmitted on TX */
 	if (status & (1 << TX_DS))
@@ -616,7 +631,7 @@ void NRF24L01_Interrupt(NRF24L01_Device* Device)
 		NRF24L01_PowerUpInRxMode(Device);
 		NRF24L01_ResetTxFlags(Device);
 		/* Give the semaphore because we are done transmitting */
-		xSemaphoreGiveFromISR(Device->xTxSemaphore, &xHigherPriorityTaskWoken);
+		xSemaphoreGiveFromISR(Device->xTxSemaphore, NULL);
 	}
 	/* Maximum number of TX retransmits interrupt */
 	else if (status & (1 << MAX_RT))
@@ -624,7 +639,7 @@ void NRF24L01_Interrupt(NRF24L01_Device* Device)
 		NRF24L01_PowerUpInRxMode(Device);
 		NRF24L01_ResetTxFlags(Device);
 		/* Give the semaphore because we are done transmitting */
-		xSemaphoreGiveFromISR(Device->xTxSemaphore, &xHigherPriorityTaskWoken);
+		xSemaphoreGiveFromISR(Device->xTxSemaphore, NULL);
 	}
 	/* Data Ready interrupt */
 	else if (status & (1 << RX_DR))
@@ -632,7 +647,7 @@ void NRF24L01_Interrupt(NRF24L01_Device* Device)
 		uint8_t pipe = PIPE_FROM_STATUS(status);
 		if (pipe < 6)
 		{
-			uint8_t buffer[32];
+			uint8_t buffer[32] = {};
 			uint8_t availableData = NRF24L01_GetDataFromRxBuffer(Device, buffer);
 
 			for (uint32_t i = 0; i < availableData; i++)
@@ -640,16 +655,9 @@ void NRF24L01_Interrupt(NRF24L01_Device* Device)
 				if (!CIRC_BUFFER_IsFull(&Device->RxPipeBuffer[pipe]))
 					CIRC_BUFFER_Insert(&Device->RxPipeBuffer[pipe], buffer[i]);
 			}
+			/* Give the xDataAvailableSemaphore to indicate there is new data available */
+			xSemaphoreGiveFromISR(Device->xDataAvailableSemaphore, NULL);
 		}
 		NRF24L01_ResetDataReadyFlag(Device);
-	}
-
-	if (xHigherPriorityTaskWoken != pdFALSE)
-	{
-		/*
-		 * If xHigherPriorityTaskWoken was set to true you we should yield.
-		 * The actual macro used here is port specific.
-		 */
-		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
 }

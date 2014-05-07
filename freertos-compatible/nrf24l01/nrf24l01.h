@@ -18,6 +18,7 @@
 #include "stm32f10x.h"
 #include <stdio.h>
 #include "circularBuffer/circularBuffer.h"
+#include "spi/spi.h"
 
 /* Defines -------------------------------------------------------------------*/
 #define MSB_BYTES(BYTES)	((BYTES >> 8) & 0xFFFFFFFF)
@@ -47,13 +48,14 @@ typedef struct
 	uint32_t IRQ_EXTI_Line;
 	uint8_t IRQ_NVIC_IRQChannel;
 
-	SPI_TypeDef* SPIx;									/* SPI peripheral to use */
-	void (*SPIx_InitWithStructure)(SPI_InitTypeDef*);	/* SPI Initialization function to use */
-	uint8_t (*SPIx_WriteRead)(uint8_t);					/* SPI WriteRead function to use */
+	SPI_Device* SPIDevice;			/* SPI Device to use */
 
 	CircularBuffer_TypeDef RxPipeBuffer[6];	/* Buffer for the six RX Pipes */
 
-	SemaphoreHandle_t xTxSemaphore;		/* Semaphore for handling TX synchronization */
+	SemaphoreHandle_t xTxSemaphore;				/* Semaphore for handling TX synchronization */
+	SemaphoreHandle_t xDataAvailableSemaphore;	/* Semaphore for when data is available.
+												 * Will be given when data is available on any pipe
+												 */
 
 	uint8_t RfChannel;		/* RF channel to use for the device, can be 0-125 */
 	uint8_t* TxAddress;		/* TX address to use, the array set should be like uint8_t txAddress[5] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE}; */
@@ -65,6 +67,8 @@ typedef struct
 	uint8_t* RxAddress5;
 	uint8_t* RxAddress6;
 	uint8_t* RxAddress;
+
+	uint8_t InTxMode;
 
 } NRF24L01_Device;
 
@@ -98,6 +102,8 @@ uint8_t NRF24L01_GetStatus(NRF24L01_Device* Device);
 uint8_t NRF24L01_GetDataFromRxBuffer(NRF24L01_Device* Device, uint8_t* Buffer);
 uint8_t NRF24L01_GetAvailableDataForPipe(NRF24L01_Device* Device, uint8_t Pipe);
 void NRF24L01_GetDataFromPipe(NRF24L01_Device* Device, uint8_t Pipe, uint8_t* Buffer, uint8_t BufferSize);
+
+void NRF24L01_PrintDebugInfo(NRF24L01_Device* Device);
 
 void NRF24L01_Interrupt(NRF24L01_Device* Device);
 

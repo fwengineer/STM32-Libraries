@@ -1,16 +1,16 @@
 /**
  ******************************************************************************
- * @file	spi1.h
+ * @file	spi.h
  * @author	Hampus Sandberg
  * @version	0.1
- * @date	2014-03-27
- * @brief	Manage SPI1
+ * @date	2014-05-04
+ * @brief	Manage SPI
  ******************************************************************************
  */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef SPI1_H_
-#define SPI1_H_
+#ifndef SPI_H_
+#define SPI_H_
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
@@ -19,9 +19,22 @@
 
 /* Defines -------------------------------------------------------------------*/
 /* Typedefs ------------------------------------------------------------------*/
-/* Function prototypes -------------------------------------------------------*/
-void SPI1_Init();
-void SPI1_InitWithStructure(SPI_InitTypeDef* SPI_InitStructure);
-uint8_t SPI1_WriteRead(uint8_t Data);
+typedef struct
+{
+	uint8_t SPI_Channel;		/* Channel for the SPI periperal */
+	SPI_TypeDef* SPIx;			/* SPI peripheral to use */
 
-#endif /* SPI1_H_ */
+	uint8_t receivedByte;
+
+	SemaphoreHandle_t xTxSemaphore;
+	SemaphoreHandle_t xRxSemaphore;
+} SPI_Device;
+
+/* Function prototypes -------------------------------------------------------*/
+void SPI_Device_Init(SPI_Device* SPIDevice);
+void SPI_InitWithStructure(SPI_Device* SPIDevice, SPI_InitTypeDef* SPI_InitStructure);
+uint8_t SPI_WriteRead(SPI_Device* SPIDevice, uint8_t Data);
+
+void SPI_Interrupt(SPI_Device* SPIDevice);
+
+#endif /* SPI_H_ */
