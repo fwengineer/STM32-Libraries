@@ -15,7 +15,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f10x.h"
-#include "common.h"
 
 /* Defines -------------------------------------------------------------------*/
 /* Typedefs ------------------------------------------------------------------*/
@@ -23,14 +22,13 @@ typedef struct
 {
 	char* OUT_DeviceName;
 	void (*OUT_WriteFunction)(uint8_t);
-	Boolean OUT_Initialized;
 } OUT_Device;
 
 /* Function prototypes -------------------------------------------------------*/
 void OUT_Write(OUT_Device *Device, uint8_t Data);
 void OUT_WriteString(OUT_Device *Device, const char* String);
 void OUT_WriteDigit(OUT_Device *Device, uint8_t Digit);
-void OUT_WriteNumber(OUT_Device *Device, uint32_t Number, Boolean Spaces);
-void OUT_WriteHexByte(OUT_Device *Device, uint8_t Byte, Boolean Prefix);
+void OUT_WriteNumber(OUT_Device *Device, uint32_t Number, uint8_t Spaces);
+void OUT_WriteHexByte(OUT_Device *Device, uint8_t Byte, uint8_t Prefix);
 
 #endif /* OUTSTREAM_H_ */

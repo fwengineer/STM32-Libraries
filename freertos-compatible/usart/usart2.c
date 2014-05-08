@@ -41,7 +41,6 @@ void USART2_Init()
 	/* Initialize the Out Device */
 	DEVICE.OUT_DeviceName = "USART2";
 	DEVICE.OUT_WriteFunction = USART2_WriteRaw;
-	DEVICE.OUT_Initialized = True;
 
 	/* Enable clock for Alternate Function IOs */
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);

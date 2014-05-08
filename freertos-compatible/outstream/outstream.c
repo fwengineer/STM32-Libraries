@@ -23,8 +23,7 @@
  */
 void OUT_Write(OUT_Device *Device, uint8_t Data)
 {
-	if (Device->OUT_Initialized)
-		Device->OUT_WriteFunction(Data);
+	Device->OUT_WriteFunction(Data);
 }
 
 /**
@@ -35,13 +34,10 @@ void OUT_Write(OUT_Device *Device, uint8_t Data)
  */
 void OUT_WriteString(OUT_Device *Device, const char* String)
 {
-	if (Device->OUT_Initialized)
+	while (*String != 0x00)
 	{
-		while (*String != 0x00)
-		{
-			OUT_Write(Device, *String);
-			String++;
-		}
+		OUT_Write(Device, *String);
+		String++;
 	}
 }
 
@@ -53,18 +49,15 @@ void OUT_WriteString(OUT_Device *Device, const char* String)
  */
 void OUT_WriteDigit(OUT_Device *Device, uint8_t Digit)
 {
-	if (Device->OUT_Initialized)
+	if (Digit < 10)
 	{
-		if (Digit < 10)
-		{
-			uint8_t character = 48 + Digit;
-			OUT_Write(Device, character);
-		}
-		else if (Digit < 16)
-		{
-			uint8_t character = 55 + Digit;
-			OUT_Write(Device, character);
-		}
+		uint8_t character = 48 + Digit;
+		OUT_Write(Device, character);
+	}
+	else if (Digit < 16)
+	{
+		uint8_t character = 55 + Digit;
+		OUT_Write(Device, character);
 	}
 }
 
@@ -75,82 +68,79 @@ void OUT_WriteDigit(OUT_Device *Device, uint8_t Digit)
  * @param	Spaces: Specify if to insert spaces between every third digit
  * @retval	None
  */
-void OUT_WriteNumber(OUT_Device *Device, uint32_t Number, Boolean Spaces)
+void OUT_WriteNumber(OUT_Device *Device, uint32_t Number, uint8_t Spaces)
 {
-	if (Device->OUT_Initialized)
+	uint8_t ones, tens, hundreds, thousands, tenThousands, hundredThousands, millions, tenMillions, hundredMillions, billions;
+
+	billions = Number / 1000000000;
+	Number = Number % 1000000000;
+
+	hundredMillions = Number / 100000000;
+	Number = Number % 100000000;
+
+	tenMillions = Number / 10000000;
+	Number = Number % 10000000;
+
+	millions = Number / 1000000;
+	Number = Number % 1000000;
+
+	hundredThousands = Number / 100000;
+	Number = Number % 100000;
+
+	tenThousands = Number / 10000;
+	Number = Number % 10000;
+
+	thousands = Number / 1000;
+	Number = Number % 1000;
+
+	hundreds = Number / 100;
+	Number = Number % 100;
+
+	tens = Number / 10;
+	Number = Number % 10;
+
+	ones = Number;
+
+	if (billions)
 	{
-		uint8_t ones, tens, hundreds, thousands, tenThousands, hundredThousands, millions, tenMillions, hundredMillions, billions;
-	
-		billions = Number / 1000000000;
-		Number = Number % 1000000000;
-
-		hundredMillions = Number / 100000000;
-		Number = Number % 100000000;
-	
-		tenMillions = Number / 10000000;
-		Number = Number % 10000000;
-	
-		millions = Number / 1000000;
-		Number = Number % 1000000;
-	
-		hundredThousands = Number / 100000;
-		Number = Number % 100000;
-	
-		tenThousands = Number / 10000;
-		Number = Number % 10000;
-
-		thousands = Number / 1000;
-		Number = Number % 1000;
-
-		hundreds = Number / 100;
-		Number = Number % 100;
-
-		tens = Number / 10;
-		Number = Number % 10;
-
-		ones = Number;
-
-		if (billions)
-		{
-			OUT_WriteDigit(Device, (uint8_t)billions);
-			if (Spaces) OUT_WriteString(Device, " ");
-		}
-		if (hundredMillions || billions)
-		{
-			OUT_WriteDigit(Device, (uint8_t)hundredMillions);
-		}
-		if (tenMillions || hundredMillions || billions)
-		{
-			OUT_WriteDigit(Device, (uint8_t)tenMillions);
-		}
-		if (millions || tenMillions || hundredMillions || billions)
-		{
-			OUT_WriteDigit(Device, (uint8_t)millions);
-			if (Spaces) OUT_WriteString(Device, " ");
-		}
-		if (hundredThousands || millions || tenMillions || hundredMillions || billions)
-		{
-			OUT_WriteDigit(Device, (uint8_t)hundredThousands);
-		}
-		if (tenThousands || hundredThousands || millions || tenMillions || hundredMillions || billions)
-		{
-			OUT_WriteDigit(Device, (uint8_t)tenThousands);
-		}
-		if (thousands || tenThousands || hundredThousands || millions || tenMillions || hundredMillions || billions)
-		{
-			OUT_WriteDigit(Device, (uint8_t)thousands);
-			if (Spaces) OUT_WriteString(Device, " ");
-		}
-		if (hundreds || thousands || tenThousands || hundredThousands || millions || tenMillions || hundredMillions || billions)
-		{
-			OUT_WriteDigit(Device, (uint8_t)hundreds);
-		}
-		if (tens || hundreds || thousands || tenThousands || hundredThousands || millions || tenMillions || hundredMillions || billions)
-		{
-			OUT_WriteDigit(Device, (uint8_t)tens);
-		}
-		OUT_WriteDigit(Device, (uint8_t)ones);
+		OUT_WriteDigit(Device, (uint8_t)billions);
+		if (Spaces) OUT_WriteString(Device, " ");
 	}
+	if (hundredMillions || billions)
+	{
+		OUT_WriteDigit(Device, (uint8_t)hundredMillions);
+	}
+	if (tenMillions || hundredMillions || billions)
+	{
+		OUT_WriteDigit(Device, (uint8_t)tenMillions);
+	}
+	if (millions || tenMillions || hundredMillions || billions)
+	{
+		OUT_WriteDigit(Device, (uint8_t)millions);
+		if (Spaces) OUT_WriteString(Device, " ");
+	}
+	if (hundredThousands || millions || tenMillions || hundredMillions || billions)
+	{
+		OUT_WriteDigit(Device, (uint8_t)hundredThousands);
+	}
+	if (tenThousands || hundredThousands || millions || tenMillions || hundredMillions || billions)
+	{
+		OUT_WriteDigit(Device, (uint8_t)tenThousands);
+	}
+	if (thousands || tenThousands || hundredThousands || millions || tenMillions || hundredMillions || billions)
+	{
+		OUT_WriteDigit(Device, (uint8_t)thousands);
+		if (Spaces) OUT_WriteString(Device, " ");
+	}
+	if (hundreds || thousands || tenThousands || hundredThousands || millions || tenMillions || hundredMillions || billions)
+	{
+		OUT_WriteDigit(Device, (uint8_t)hundreds);
+	}
+	if (tens || hundreds || thousands || tenThousands || hundredThousands || millions || tenMillions || hundredMillions || billions)
+	{
+		OUT_WriteDigit(Device, (uint8_t)tens);
+	}
+	OUT_WriteDigit(Device, (uint8_t)ones);
 }
 
 /**
@@ -160,14 +150,11 @@ void OUT_WriteNumber(OUT_Device *Device, uint32_t Number, Boolean Spaces)
  * @param	Prefix: If a "0x" prefix should be added
  * @retval	None
  */
-void OUT_WriteHexByte(OUT_Device *Device, uint8_t Byte, Boolean Prefix)
+void OUT_WriteHexByte(OUT_Device *Device, uint8_t Byte, uint8_t Prefix)
 {
-	if (Device->OUT_Initialized)
-	{
-		if (Prefix) OUT_WriteString(Device, "0x");
-		OUT_WriteDigit(Device, (Byte >> 4) & 0xF);
-		OUT_WriteDigit(Device, Byte & 0xF);
-	}
+	if (Prefix) OUT_WriteString(Device, "0x");
+	OUT_WriteDigit(Device, (Byte >> 4) & 0xF);
+	OUT_WriteDigit(Device, Byte & 0xF);
 }
 
 /* Interrupt Handlers --------------------------------------------------------*/
