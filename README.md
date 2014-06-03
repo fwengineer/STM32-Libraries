@@ -1,6 +1,6 @@
-##STM32-Libraries
+#STM32-Libraries
 
-Libraries for STM32 microcontrollers
+Libraries for STM32 microcontrollers. Currently a bit of a mess but I will organize it soon.
 
 ##LICENSE
 
