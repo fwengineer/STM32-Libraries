@@ -37,9 +37,10 @@
 /**
  * @brief	Initializes the nRF24L01
  * @param	Device: The device to use
- * @retval	None
+ * @retval	ERROR: If something went wrong
+ * @retval	SUCCESS: If everything went OK
  */
-void NRF24L01_Init(NRF24L01_Device* Device)
+ErrorStatus NRF24L01_Init(NRF24L01_Device* Device)
 {
 	/*
 	 * Create the binary semaphores:
@@ -53,7 +54,6 @@ void NRF24L01_Init(NRF24L01_Device* Device)
 	xSemaphoreGive(Device->xDataAvailableSemaphore);
 	/* Take the semaphore because no data is available yet */
 	xSemaphoreTake(Device->xDataAvailableSemaphore, portMAX_DELAY);
-
 
 	/* Initialize RX Buffers */
 	for (uint32_t i = 0; i < 6; i++)
@@ -140,6 +140,11 @@ void NRF24L01_Init(NRF24L01_Device* Device)
 	/* Set RF Channel */
 	NRF24L01_SetRFChannel(Device, Device->RfChannel);
 
+	/* Check that the RF channel was set */
+	if (NRF24L01_GetRFChannel(Device) != Device->RfChannel)
+		goto error;
+
+
 	/* Set payload size for the pipes, use same for all, and enable the pipes */
 	for (uint32_t pipe = 0; pipe < 6; pipe++)
 	{
@@ -163,8 +168,16 @@ void NRF24L01_Init(NRF24L01_Device* Device)
 	NRF24L01_FlushRxBuffer(Device);
 	NRF24L01_ResetAllFlags(Device);
 
+	/* Set the address width */
+	NRF24L01_SetAddressWidth(Device);
+
 	/* Power up the device i RX mode to start listening for packets */
 	NRF24L01_PowerUpInRxMode(Device);
+
+	return SUCCESS;
+
+error:
+	return ERROR;
 }
 
 /**
@@ -174,35 +187,41 @@ void NRF24L01_Init(NRF24L01_Device* Device)
  * @param	ByteCount: The number of bytes in Data
  * @retval	None
  */
-void NRF24L01_WritePayload(NRF24L01_Device* Device, uint8_t* Data, uint8_t DataCount)
+ErrorStatus NRF24L01_WritePayload(NRF24L01_Device* Device, uint8_t* Data, uint8_t DataCount)
 {
 	/* You can only send the amount of data specified in MAX_DATA_COUNT */
-	if (DataCount > MAX_DATA_COUNT) return;
+	if (DataCount > MAX_DATA_COUNT)
+		return ERROR;
 
 	/* Try to take the semaphore */
-	xSemaphoreTake(Device->xTxSemaphore, portMAX_DELAY);
-
-	/* Semaphore was taken so we can proceed with sending new data */
-	DISABLE_DEVICE(Device);				/* Disable the device while sending data to TX buffer */
-	NRF24L01_PowerUpInTxMode(Device);	/* Power up in TX mode */
-	NRF24L01_FlushTxBuffer(Device);		/* Flush the TX buffer */
-
-	SELECT_DEVICE(Device);
-
-	SPI_WriteRead(Device->SPIDevice, W_TX_PAYLOAD);	/* We want to write the TX payload */
-	SPI_WriteRead(Device->SPIDevice, DataCount);		/* Write the data count */
-	uint32_t i;
-	for (i = 0; i < DataCount; i++)
+	if (xSemaphoreTake(Device->xTxSemaphore, 100 / portTICK_PERIOD_MS) == pdTRUE)
 	{
-		SPI_WriteRead(Device->SPIDevice, Data[i]);	/* Write the data */
-	}
-	for (i++; i <= MAX_DATA_COUNT; i++)
-	{
-		SPI_WriteRead(Device->SPIDevice, PAYLOAD_FILLER_DATA);	/* Fill the rest of the payload with filler data */
-	}
+		/* Semaphore was taken so we can proceed with sending new data */
+		DISABLE_DEVICE(Device);				/* Disable the device while sending data to TX buffer */
+		NRF24L01_PowerUpInTxMode(Device);	/* Power up in TX mode */
+		NRF24L01_FlushTxBuffer(Device);		/* Flush the TX buffer */
 
-	DESELECT_DEVICE(Device);
-    ENABLE_DEVICE(Device);
+		SELECT_DEVICE(Device);
+
+		SPI_WriteRead(Device->SPIDevice, W_TX_PAYLOAD);	/* We want to write the TX payload */
+		SPI_WriteRead(Device->SPIDevice, DataCount);	/* Write the data count */
+		uint32_t i;
+		for (i = 0; i < DataCount; i++)
+		{
+			SPI_WriteRead(Device->SPIDevice, Data[i]);	/* Write the data */
+		}
+		for (i++; i <= MAX_DATA_COUNT; i++)
+		{
+			SPI_WriteRead(Device->SPIDevice, PAYLOAD_FILLER_DATA);	/* Fill the rest of the payload with filler data */
+		}
+
+		DESELECT_DEVICE(Device);
+	    ENABLE_DEVICE(Device);
+
+	    return SUCCESS;
+	}
+	else
+		return ERROR;
 }
 
 /**
@@ -291,6 +310,18 @@ void NRF24L01_SetRFChannel(NRF24L01_Device* Device, uint8_t Channel)
 	{
 		NRF24L01_WriteRegister(Device, W_REGISTER | RF_CH, &Channel, 1);
 	}
+}
+
+/**
+ * @brief	Get the RF channel to transmit on
+ * @param	Device: The device to use
+ * @retval	None
+ */
+uint8_t NRF24L01_GetRFChannel(NRF24L01_Device* Device)
+{
+	uint8_t data = 0;
+	NRF24L01_ReadRegister(Device, R_REGISTER | RF_CH, &data, 1);
+	return data;
 }
 
 /**
@@ -470,13 +501,29 @@ uint8_t NRF24L01_GetDataFromRxBuffer(NRF24L01_Device* Device, uint8_t* Buffer)
  * @param	Pipe: The pipe to check for data
  * @retval	The available data for the specified pipe
  */
-uint8_t NRF24L01_GetAvailableDataForPipe(NRF24L01_Device* Device, uint8_t Pipe)
+uint32_t NRF24L01_GetAvailableDataForPipe(NRF24L01_Device* Device, uint8_t Pipe)
 {
 	if (Pipe < 6)
 	{
 		return CIRC_BUFFER_GetCount(&Device->RxPipeBuffer[Pipe]);
 	}
 	return 0;
+}
+
+/**
+ * @brief	Get available data for all pipes
+ * @param	Device: The device to use
+ * @retval	The available data for all pipes
+ */
+uint32_t NRF24L01_GetAvailableDataForAllPipes(NRF24L01_Device* Device)
+{
+	uint32_t sum = 0;
+	for (uint32_t i = 0; i < 6; i++)
+	{
+		sum += CIRC_BUFFER_GetCount(&Device->RxPipeBuffer[i]);
+	}
+
+	return sum;
 }
 
 /**
@@ -489,16 +536,47 @@ uint8_t NRF24L01_GetAvailableDataForPipe(NRF24L01_Device* Device, uint8_t Pipe)
  * @note	It's good to check that the requested amount of data is available
 			first by calling NRF24L01_GetAvailableDataForPipe()
  */
-void NRF24L01_GetDataFromPipe(NRF24L01_Device* Device, uint8_t Pipe, uint8_t* Buffer, uint8_t BufferSize)
+void NRF24L01_GetDataFromPipe(NRF24L01_Device* Device, uint8_t Pipe, uint8_t* pBuffer, uint8_t BufferSize)
 {
 	if (Pipe < 6)
 	{
-		uint8_t i;
-		for (i = 0; i < BufferSize; i++)
+		for (uint32_t i = 0; i < BufferSize; i++)
 		{
-			Buffer[i] = CIRC_BUFFER_Remove(&Device->RxPipeBuffer[Pipe]);
+			pBuffer[i] = CIRC_BUFFER_Remove(&Device->RxPipeBuffer[Pipe]);
 		}
 	}
+}
+
+/**
+ * @brief	Peek at the first byte in a specified pipe
+ * @param	Device: The device to use
+ * @param	Pipe: The pipe to check for data
+ * @param	Storage: Pointer to where the data should be stored
+ * @param	DataCount: The amount of data to peek
+ * @retval	None
+ */
+void NRF24L01_PeekAtDataInPipe(NRF24L01_Device* Device, uint8_t Pipe, uint8_t* pBuffer, uint8_t BufferSize)
+{
+	if (Pipe < 6)
+	{
+		/* Start peeking */
+		CIRC_BUFFER_StartPeeking(&Device->RxPipeBuffer[Pipe]);
+
+		for (uint32_t i = 0; i < BufferSize; i++)
+		{
+			pBuffer[i] = CIRC_BUFFER_Peek(&Device->RxPipeBuffer[Pipe]);
+		}
+	}
+}
+
+/**
+ * @brief	Set the address width of the device
+ * @param	Device: The device to use
+ * @retval	None
+ */
+void NRF24L01_SetAddressWidth(NRF24L01_Device* Device)
+{
+	NRF24L01_WriteRegister(Device, SETUP_AW, &Device->addressWidth, 1);
 }
 
 /* Debug Print ---------------------------------------------------------------*/

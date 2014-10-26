@@ -32,6 +32,13 @@
 #define PAYLOAD_FILLER_DATA	0xFF
 
 /* Typedefs ------------------------------------------------------------------*/
+typedef enum
+{
+	NRF24L01AddressWidth_3bytes = 0x01,
+	NRF24L01AddressWidth_4bytes = 0x02,
+	NRF24L01AddressWidth_5bytes = 0x03,
+} NRF24L01AddressWidth;
+
 typedef struct
 {
 	char* NRF24L01_DeviceName;
@@ -57,6 +64,8 @@ typedef struct
 												 * Will be given when data is available on any pipe
 												 */
 
+	NRF24L01AddressWidth addressWidth;
+
 	uint8_t RfChannel;		/* RF channel to use for the device, can be 0-125 */
 	uint8_t* TxAddress;		/* TX address to use, the array set should be like uint8_t txAddress[5] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE}; */
 	uint8_t* RxAddress0;	/* RX address to use for each pipe, the array should look like: */
@@ -74,9 +83,9 @@ typedef struct
 
 
 /* Function prototypes -------------------------------------------------------*/
-void NRF24L01_Init(NRF24L01_Device* Device);
+ErrorStatus NRF24L01_Init(NRF24L01_Device* Device);
 
-void NRF24L01_WritePayload(NRF24L01_Device* Device, uint8_t* Data, uint8_t DataCount);
+ErrorStatus NRF24L01_WritePayload(NRF24L01_Device* Device, uint8_t* Data, uint8_t DataCount);
 
 void NRF24L01_ReadRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* Buffer, uint8_t BufferSize);
 void NRF24L01_WriteRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* Buffer, uint8_t BufferSize);
@@ -84,6 +93,7 @@ void NRF24L01_WriteRegister(NRF24L01_Device* Device, uint8_t Register, uint8_t* 
 void NRF24L01_SetTxAddress(NRF24L01_Device* Device, uint8_t* Address);
 void NRF24L01_SetRxAddressForPipe(NRF24L01_Device* Device, uint8_t* Address, uint8_t Pipe);
 void NRF24L01_SetRFChannel(NRF24L01_Device* Device, uint8_t Channel);
+uint8_t NRF24L01_GetRFChannel(NRF24L01_Device* Device);
 void NRF24L01_SetPayloadSizeForPipe(NRF24L01_Device* Device, uint8_t Size, uint8_t Pipe);
 
 void NRF24L01_EnablePipe(NRF24L01_Device* Device, uint8_t Pipe);
@@ -100,8 +110,12 @@ void NRF24L01_PowerDownMode(NRF24L01_Device* Device);
 
 uint8_t NRF24L01_GetStatus(NRF24L01_Device* Device);
 uint8_t NRF24L01_GetDataFromRxBuffer(NRF24L01_Device* Device, uint8_t* Buffer);
-uint8_t NRF24L01_GetAvailableDataForPipe(NRF24L01_Device* Device, uint8_t Pipe);
-void NRF24L01_GetDataFromPipe(NRF24L01_Device* Device, uint8_t Pipe, uint8_t* Buffer, uint8_t BufferSize);
+uint32_t NRF24L01_GetAvailableDataForPipe(NRF24L01_Device* Device, uint8_t Pipe);
+uint32_t NRF24L01_GetAvailableDataForAllPipes(NRF24L01_Device* Device);
+void NRF24L01_GetDataFromPipe(NRF24L01_Device* Device, uint8_t Pipe, uint8_t* pBuffer, uint8_t BufferSize);
+void NRF24L01_PeekAtDataInPipe(NRF24L01_Device* Device, uint8_t Pipe, uint8_t* pBuffer, uint8_t BufferSize);
+
+void NRF24L01_SetAddressWidth(NRF24L01_Device* Device);
 
 void NRF24L01_PrintDebugInfo(NRF24L01_Device* Device);
 

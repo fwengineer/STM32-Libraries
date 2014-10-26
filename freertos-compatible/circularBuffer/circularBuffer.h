@@ -37,12 +37,11 @@
  */
 typedef struct
 {
-	CIRCULARBUFFER_DATATYPE *in;							/** Pointer that points at the head where 
-																data should be written */
-	CIRCULARBUFFER_DATATYPE *out;							/** Pointer that points at the tail where 
-																data should be read */
-	CIRCULARBUFFER_DATATYPE data[CIRCULARBUFFER_SIZE];		/** The actual buffer */
-	CIRCULARBUFFER_COUNTTYPE count;							/** A counter for how much data there is
+	CIRCULARBUFFER_DATATYPE *in;							/* Pointer that points at the head where data should be written */
+	CIRCULARBUFFER_DATATYPE *out;							/* Pointer that points at the tail where data should be read */
+	CIRCULARBUFFER_DATATYPE *peekOut;						/* Pointer that points at the tail where data should be peeked at */
+	CIRCULARBUFFER_DATATYPE data[CIRCULARBUFFER_SIZE];		/* The actual buffer */
+	CIRCULARBUFFER_COUNTTYPE count;							/* A counter for how much data there is
 																in the buffer */
 } CircularBuffer_TypeDef;
 
@@ -50,6 +49,8 @@ typedef struct
 void CIRC_BUFFER_Init(CircularBuffer_TypeDef* CircularBuffer);
 void CIRC_BUFFER_Insert(CircularBuffer_TypeDef* CircularBuffer, CIRCULARBUFFER_DATATYPE Data);
 CIRCULARBUFFER_DATATYPE CIRC_BUFFER_Remove(CircularBuffer_TypeDef* CircularBuffer);
+void CIRC_BUFFER_StartPeeking(CircularBuffer_TypeDef* CircularBuffer);
+CIRCULARBUFFER_DATATYPE CIRC_BUFFER_Peek(CircularBuffer_TypeDef* CircularBuffer);
 CIRCULARBUFFER_COUNTTYPE CIRC_BUFFER_GetCount(CircularBuffer_TypeDef* CircularBuffer);
 uint8_t CIRC_BUFFER_IsEmpty(CircularBuffer_TypeDef* CircularBuffer);
 uint8_t CIRC_BUFFER_IsFull(CircularBuffer_TypeDef* CircularBuffer);

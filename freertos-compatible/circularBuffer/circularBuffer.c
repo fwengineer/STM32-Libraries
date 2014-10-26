@@ -62,6 +62,31 @@ CIRCULARBUFFER_DATATYPE CIRC_BUFFER_Remove(CircularBuffer_TypeDef* CircularBuffe
 }
 
 /**
+ * @brief	Start peeking at the buffer
+ * @param	CircularBuffer: buffer to peek at
+ * @retval	None
+ */
+void CIRC_BUFFER_StartPeeking(CircularBuffer_TypeDef* CircularBuffer)
+{
+	CircularBuffer->peekOut = CircularBuffer->out;
+}
+
+/**
+ * @brief	Peeks at the item at the end of the buffer
+ * @param	CircularBuffer: buffer to peek at
+ * @retval	data at the end of the buffer
+ */
+CIRCULARBUFFER_DATATYPE CIRC_BUFFER_Peek(CircularBuffer_TypeDef* CircularBuffer)
+{
+	CIRCULARBUFFER_DATATYPE data = *CircularBuffer->peekOut;
+
+    if (++CircularBuffer->peekOut == &CircularBuffer->data[CIRCULARBUFFER_SIZE])
+        CircularBuffer->peekOut = CircularBuffer->data;
+
+    return data;
+}
+
+/**
  * @brief	Get the current count for the buffer
  * @param	CircularBuffer: the buffer to get the count for
  * @retval	the count value
